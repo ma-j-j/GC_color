@@ -1,91 +1,40 @@
-#include "OfflineTest.h"
-#include <QListView>
-
-
-OffLineTest::OffLineTest(Ui::MainWindowView *ui1,QObject *parent)
-    : QObject{parent}, ui(ui1)
-{
-
-    ui->comboBox_IC->addItem(u8"11.5x13");
-    ui->comboBox_IC->addItem(u8"11x13");
-    ui->comboBox_IC->setCurrentIndex(0);
-    QAbstractItemView *abstractViewIC = ui->comboBox_IC->view();
-    QListView *listViewIC = qobject_cast<QListView *>(abstractViewIC);
-    listViewIC->setSpacing(6);
-
-    // 连接信号与槽
-    connect(ui->pushButton_OpenImg_2, &QPushButton::clicked, this, &OffLineTest::slotOffLineTestingView_On_PushButton_OpenImg_Clicked);//打开图片
-    connect(ui->pushButton_StartTest,&QPushButton::clicked,this,&OffLineTest::slotOffLineTestingView_On_PushButton_StartTest_Clicked);//开始测试
-    changeStyle();
-}
-
-void OffLineTest::setImg(QImage qImage)
-{
-    if(true == qImage.isNull())
-    {
-        qDebug()<<"OffLineTestingView::setImg 传入图像为NULL";
-        return;
+bool BaseCamera_Daheng::takePhoto(
+    const QVector< bool > &image_valid_array,
+    result_process_fun_t new_result_process_fun,
+    void *user_data ) noexcept {
+    auto data_ptr = m_d.data_ptr();
+    if( bool _Expected = false;
+        !m_d->m_under_callback_flag.compare_exchange_strong( _Expected, true ) ) {
+        return false;
     }
-    ui->graphicsView_Test->loadQPixmapImage(QPixmap::fromImage(qImage));
-    this->ui->graphicsView->setVisible(false);
-    this->ui->graphicsViewAnno->setVisible(false);
-    this->ui->graphicsView_Test->setVisible(true);
-    ui->label_ShowImage->setText("离线测试图片");
-}
-
-
-//选择图片
-void OffLineTest::slotOffLineTestingView_On_PushButton_OpenImg_Clicked()
-{
-    QString file_path = QFileDialog::getOpenFileName(nullptr,tr("Open Image"),"15000_IMG",tr("Image Files(*.jpg *.bmp *.png)"));
-    if(true == file_path.isEmpty())
-    {
-        // 取消了对话框
-        qDebug()<<u8"取消选择图片";
-        return ;
+    auto &&guard1 = qScopeGuard( [ & ]() noexcept {
+        m_d->m_under_callback_flag.store( false, std::memory_order_release );
+    } );
+    if( !data_ptr->m_isCameraOpened ) {
+        data_ptr->m_error_process_fun( "Camera is not opened" );
+        return false;
     }
-    this->ui->graphicsView->setVisible(true);//显示原图
-    this->ui->graphicsViewAnno->setVisible(false);
-    this->ui->graphicsView_Test->setVisible(true);
-    ui->label_ShowImage->setText("离线测试图片");
-
-    // 将图像路径显示到界面的lineEdit
-    ui->lineEdit_filePath_2->setText(file_path);
-
-}
-
-//开始测试
-void OffLineTest::slotOffLineTestingView_On_PushButton_StartTest_Clicked()
-{
-    // 将界面设置的信息汇总发送给后端进行检测
-    // 获取图像路径
-    QString imgFile = ui->lineEdit_filePath_2->text();
-    if(true == imgFile.isEmpty())
-    {
-        // 图像路径为空
-        QMessageBox::warning(NULL,u8"Error",u8"图像路径为空");
-        return;
+    else if( image_valid_array.size() != 2 ) {
+        data_ptr->m_error_process_fun( "InValid image_valid_array" );
+        return false;
     }
-
-    // 获取芯片类型
-    IC_Type type = IC_Type::A;
-    QString strType = ui->comboBox_IC->currentText();
-    if("11.5x13" == strType)
-    {
-        type = IC_Type::A;
+    else if( data_ptr->m_mode.mode != EmExecuteMode::emTakePhoto ) {
+        data_ptr->m_error_process_fun( "InValid Camera Mode" );
+        return false;
     }
-    else if("11x13" == strType)
-    {
-        type = IC_Type::B;
+    data_ptr->m_takphoto_mode.m_result_process_fun = { new_result_process_fun, user_data };
+    data_ptr->m_takphoto_mode.m_image_valid_array = image_valid_array;
+    try {
+        data_ptr->m_objFeatureControlPtr->GetCommandFeature( "TriggerSoftware" )->Execute();
     }
-
-    // 将信息发送到后端进行检测
-    emit this->signalOffLineTestingView_Send_Detection(imgFile,type);
-
-    //检测测试
-    rect_detect img_detect;
-    cv::Mat result;
-    // img_detect.calibration();
-    img_detect.ROI(imgFile,150,result);
-
+    catch( std::exception &e ) {
+        data_ptr->m_error_process_fun( e.what() );
+        return false;
+    }
+    catch( ... ) {
+        data_ptr->m_error_process_fun( "unkown error" );
+        return false;
+    }
+    guard1.dismiss();
+    return true;
 }
