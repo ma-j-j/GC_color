@@ -1,53 +1,42 @@
-#ifndef DAHENG_CAMERA_H
-#define DAHENG_CAMERA_H
-
-#include <GalaxyIncludes.h>
+#ifndef RECEIVE_SIGNAL_H
+#define RECEIVE_SIGNAL_H
+#include <iostream>
 
 #include <QDebug>
+#include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QObject>
-
-#include "opencv2/opencv.hpp"
-
 #include "QX-800_Model/Img_detect.h"
+#include "QX-800_Model/daheng_camera.h"
 
-// 用户继承采集事件处理类
-class CSampleCaptureEventHandler : public QObject, public ICaptureEventHandler
-{
-    Q_OBJECT
+class receive : public QObject
+{    Q_OBJECT
 private:
-public:
-    cv::Mat img;
-    explicit CSampleCaptureEventHandler(QObject *parent = nullptr);
+    cv::Mat result;
+    std::vector<cv::Rect> m_ROI;
+    cv::Mat m_img;
+    bool *SavepictutePtr;
 
-    void DoOnImageCaptured(CImageDataPointer &objImageDataPointer,
-                           void *pUserParam); //回调函数采集图像
-signals:
-    void signals_TakePhoto(cv::Mat img); //发图片
-    // void signals_test(int);
-};
+    chip_detect *m_Detect;
+    DaHeng_camera *m_Picutre;
 
-class DaHeng_camera : public QObject
-{
-    Q_OBJECT
 public:
-    explicit DaHeng_camera(QObject *parent = nullptr);
-    void open_camera(); //初始化相机
-    bool *getisSavePicutePtr() { return &isSavePicture; }            //获取是否保存图片的指针
-    void setSavePicture(bool isSave) { *isSavePicturePtr = isSave; } //更改是否保存图片的指针
+    explicit receive(QObject *parent = nullptr);// 默认构造函数
 
 public slots:
-    void slotTakePhoto(); //软触发拍照
-    void slotSavePictuer(); //离线检测的保存图片按钮触发
+    void slotReciveParamete(std::vector<int> &Para);         // 接收算法参数
+    void slotReciveFile(QString, QString);                   // 接收图片路径和ROI.Json，用于离线测试
+    void slotWriteJson(QJsonObject JsonObj);                 // 接收修改信息并写入json文件
+    void slotReceiveROIJson(std::vector<cv::Rect> roi_data); // 接收ROI.Json信号用于算法检测
+    void slotReceiveTakePhoto(cv::Mat img);                  // 接收拍照图片用于算法检测
+    void slotReceiveSavePicture(cv::Mat img);                // 接收拍照图片并保存
 
 signals:
-    void signals_TakePhoto(cv::Mat img);  // 发图片用于算法检测
-    void signal_SavePicture(cv::Mat img); // 发图片用于保存
-
-private:
-    CGXFeatureControlPointer m_ObjFeatureControlPtr;
-    CSampleCaptureEventHandler *m_Photo;
-    bool isSavePicture;                      //是否保存图片;
-    bool *isSavePicturePtr = &isSavePicture; //是否保存图片的指针
+    void signal_sent_detect_Image(QImage img);                    // 发送检测后的图片(离线测试)
+    void signal_sentROI_ToDetect(std::vector<cv::Rect> roi_data); // 发送ROI区域信息到后端检测
+    // void signal_sentCameraData_toMainWindow(QJsonObject JsonObj); // 发送曝光时间
+    void signal_sent_Detect_Img(QImage);                          // 发送检测后的图片（算法检测）
 };
 
-#endif // DAHENG_CAMERA_H
+#endif // RECEIVE_SIGNAL_H
