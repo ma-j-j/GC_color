@@ -1,109 +1,109 @@
-#include "daheng_camera.h"
+#include "receive_signal.h"
 
-DaHeng_camera::DaHeng_camera(QObject *parent)
+receive::receive(QObject *parent)
+    : QObject{parent}
 {
-    this->m_Photo = new CSampleCaptureEventHandler();
-}
-CSampleCaptureEventHandler::CSampleCaptureEventHandler(QObject *parent)
-{
-    // connect(this,
-    //         &CSampleCaptureEventHandler::signals_TakePhoto,
-    //         this,
-    //         &CSampleCaptureEventHandler::slotProcess_Img); //传图片进行检测
+    this->m_Detect = new chip_detect();
+    this->m_Picutre = new DaHeng_camera();
 }
 
-void CSampleCaptureEventHandler::DoOnImageCaptured(CImageDataPointer &objImageDataPointer,
-                                                   void *pUserParam)
+// 接收ROI区域
+void receive::slotReceiveROIJson(std::vector<cv::Rect> roi_data)
 {
-    cv::Mat image;
-    image.create(objImageDataPointer->GetHeight(), objImageDataPointer->GetWidth(), CV_8UC3);
-    void *pRGB24Buffer = NULL;
-    // 假设原始数据是BayerRG8图像
-    pRGB24Buffer = objImageDataPointer->ConvertToRGB24(GX_BIT_0_7, GX_RAW2RGB_NEIGHBOUR, true);
-    memcpy(image.data,
-           pRGB24Buffer,
-           (objImageDataPointer->GetHeight()) * (objImageDataPointer->GetWidth()) * 3);
-    img = image.clone();
-    if (!img.empty()) {
-        cv::imwrite("photo.png", img);
-        // emit signals_TakePhoto(img);
-        qDebug() << "拍照成功";
+    m_ROI = roi_data;
+    if (m_ROI.size() != 0) {
+        qDebug() << "ROI数量:" << m_ROI.size();
+    }
+}
+
+// 接收拍照图片，并进行芯片卡扣检测处理
+void receive::slotReceiveTakePhoto(cv::Mat img)
+{
+    qDebug() << "算法检测" << *this->m_Picutre->getisSavePicutePtr();
+    if (*this->m_Picutre->getisSavePicutePtr() == false) {
+        m_img = img;
+        if (!m_img.empty()) {
+            qDebug() << "接收的图像不为空";
+        }
+        qDebug() << "检测算法开始";
+
+        this->m_Detect->calibration(m_img);                     // 图像校正
+        auto start = std::chrono::high_resolution_clock::now(); // 开始计时
+
+        for (int i = 0; i < m_ROI.size(); i++) {
+            cv::Mat m_ROI_IMG = m_img(m_ROI[i]);
+            this->m_Detect->TF_chip(m_ROI_IMG, m_img, m_ROI[i], i + 1); // 每个ROI进行检测
+            std::cout << "ROI" << i + 1 << ":finish" << std::endl;
+        }
+        auto end = std::chrono::high_resolution_clock::now(); // 结束计时
+        std::chrono::duration<double> elapsed = end - start;
+        std::cout << "Algorithm execution time: " << elapsed.count() << " seconds" << std::endl;
+
+        QImage qimg = this->m_Detect->MatToQImage(m_img);
+        emit this->signal_sent_Detect_Img(qimg);
+    }
+}
+
+void receive::slotReceiveSavePicture(cv::Mat img)
+{
+    qDebug() << "图片保存" << *this->m_Picutre->getisSavePicutePtr();
+    // 标志位为true时保存图片
+    if (*this->m_Picutre->getisSavePicutePtr() == true) {
+        if (!img.empty()) {
+            cv::imwrite("img.bmp", img);
+            qDebug() << "保存图片成功";
+        }
+    }
+}
+
+// 接收算法参数
+void receive::slotReciveParamete(std::vector<int> &Para)
+{
+    this->m_Detect->get_parameter(Para);
+}
+
+//离线测试测试：测试文件图片
+void receive::slotReciveFile(QString Img_file, QString Json_file)
+{
+    qDebug()<<"receive_fileName:"<<Img_file;
+    // std::cout<<"2"<<std::endl;
+    result = this->m_Detect->offline_ROItest(Img_file,Json_file);
+    qDebug()<<"detect finish";
+    cv::Mat img_1;
+    QImage qimg_1;
+    img_1 = result;
+    qimg_1 = this->m_Detect->MatToQImage(img_1);
+    emit this->signal_sent_detect_Image(qimg_1); //发图片
+}
+
+//设置：接收修改信息并写入json文件
+void receive::slotWriteJson(QJsonObject JsonObj)
+{
+    // 创建 QJsonDocument 并设置 JSON 对象
+    QJsonDocument jsonDoc(JsonObj);
+
+    // 将 JSON 文档转换为格式化的字符串（可选）
+    QString jsonString = jsonDoc.toJson(QJsonDocument::Indented);
+
+    // 打开文件以写入 JSON 数据
+    QFile file("test_data.json");
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        qWarning() << "无法打开文件进行写入:" << file.errorString();
+        return;
+    }
+
+    // 写入 JSON 字符串到文件
+    qint64 bytesWritten = file.write(jsonString.toUtf8());
+    if (bytesWritten == -1) {
+        qWarning() << "写入文件失败:" << file.errorString();
+        My_LOG(QLOG_ERROR, u8"写入文件失败");
+    } else if (bytesWritten != jsonString.toUtf8().size()) {
+        qWarning() << "部分数据写入文件失败";
+        My_LOG(QLOG_ERROR, u8"部分数据写入文件失败");
     } else {
-        qDebug() << "拍照失败";
+        My_LOG(QLOG_INFO, u8"成功将 JSON 数据写入文件");
+        qDebug() << "成功将 JSON 数据写入文件:" << file.fileName();
     }
-}
-
-cv::Mat &CSampleCaptureEventHandler::getImg()
-{
-    return img;
-}
-
-void DaHeng_camera::sent_TakePhoto()
-{
-    src = this->m_Photo->getImg();
-    if (!src.empty()) {
-        qDebug() << "src图像不为空";
-        emit this->signals_TakePhoto(src);
-    } else {
-        qDebug() << "src图像为空";
-    }
-}
-
-// 接收图像进行处理
-void CSampleCaptureEventHandler::slotProcess_Img(cv::Mat img)
-{
-    if (!img.empty()) {
-        // cv::imwrite("photo.png", img);
-        qDebug() << "图像不为空";
-    }
-}
-
-// 初始化相机
-void DaHeng_camera::open_camera()
-{
-    ICaptureEventHandler *pCaptureEventHandler = NULL; ///<采集回调对象
-
-    //初始化
-    IGXFactory::GetInstance().Init();
-
-    gxdeviceinfo_vector vectorDeviceInfo;
-    IGXFactory::GetInstance().UpdateDeviceList(1000, vectorDeviceInfo);
-    if (0 == vectorDeviceInfo.size()) {
-    }
-    //打开第一台设备以及设备下面第一个流
-    CGXDevicePointer ObjDevicePtr
-        = IGXFactory::GetInstance().OpenDeviceBySN(vectorDeviceInfo[0].GetSN(), GX_ACCESS_EXCLUSIVE);
-    CGXStreamPointer ObjStreamPtr = ObjDevicePtr->OpenStream(0);
-
-    //获取远端设备属性控制器
-    this->m_ObjFeatureControlPtr = ObjDevicePtr->GetRemoteFeatureControl();
-    //注册远端设备事件:曝光结束事件【目前只有千兆网系列相机支持曝光结束事件】
-    //选择事件源
-    this->m_ObjFeatureControlPtr->GetEnumFeature("EventSelector")->SetValue("ExposureEnd");
-    //使能事件
-    this->m_ObjFeatureControlPtr->GetEnumFeature("EventNotification")->SetValue("On");
-
-    // 设置触发模式为On
-    this->m_ObjFeatureControlPtr->GetEnumFeature("TriggerMode")->SetValue("On");
-    // 设置触发源为软触发
-    this->m_ObjFeatureControlPtr->GetEnumFeature("TriggerSource")->SetValue("Software");
-
-    //注册回调采集
-    pCaptureEventHandler = new CSampleCaptureEventHandler();
-    ObjStreamPtr->RegisterCaptureCallback(pCaptureEventHandler, NULL);
-    //发送开采命令
-    ObjStreamPtr->StartGrab();
-    this->m_ObjFeatureControlPtr->GetCommandFeature("AcquisitionStart")->Execute();
-
-    qDebug() << "相机初始化成功";
-}
-
-void DaHeng_camera::slotTakePhoto()
-{
-    qDebug() << "收到拍照信号，开始拍照";
-    // 发送软触发命令
-    this->m_ObjFeatureControlPtr->GetCommandFeature("TriggerSoftware")->Execute();
-    // if (!this->m_Photo->img.empty()) {
-    sent_TakePhoto();
-    // }
+    // 关闭文件
+    file.close();
 }
