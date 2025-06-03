@@ -93,12 +93,6 @@ int detect_centerY;
 #define RED_UPPER() Scalar(0, 0, 200)
 #endif
 
-// private:
-//     cv::Point centre;
-//     cv::Mat grayimage;
-//     cv::Mat out_image;
-//     cv::Rect r;
-
 void color::color_recognite(cv::Mat image, cv::Scalar Low, cv::Scalar High)
 {
 	cv::Mat input_image;
