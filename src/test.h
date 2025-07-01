@@ -1,42 +1,63 @@
-#ifndef RECEIVE_SIGNAL_H
-#define RECEIVE_SIGNAL_H
-#include <iostream>
+#ifndef DISPLAYIMAGEGRAPHICSVIEW_H
+#define DISPLAYIMAGEGRAPHICSVIEW_H
 
-#include <QDebug>
-#include <QFile>
-#include <QJsonDocument>
-#include <QJsonObject>
 #include <QObject>
-#include "QX-800_Model/Img_detect.h"
-#include "QX-800_Model/daheng_camera.h"
+#include <QGraphicsView>
+#include <QGraphicsScene>
+#include <QGraphicsPixmapItem>
+#include <QWheelEvent>
+#include <QMouseEvent>
+#include <QMenu>
+#include <QDebug>
+#include <QAction>
+#include <QList>
+#include <QGraphicsPolygonItem>
 
-class receive : public QObject
-{    Q_OBJECT
-private:
-    cv::Mat result;
-    std::vector<cv::Rect> m_ROI;
-    cv::Mat m_img;
-    bool *SavepictutePtr;
+#include "opencv2/opencv.hpp"
 
-    chip_detect *m_Detect;
-    DaHeng_camera *m_Picutre;
-
+class DisplayImageGraphicsview : public QGraphicsView
+{
+    Q_OBJECT
 public:
-    explicit receive(QObject *parent = nullptr);// 默认构造函数
+    DisplayImageGraphicsview(QWidget *parent = nullptr);
+    ~DisplayImageGraphicsview();
+public:
+    // 根据图像路径加载图像到场景
+    void loadFileImage(const QString &imagePath);
+    // 直接传递QPixmap图像加载到场景
+    void loadQPixmapImage(const QPixmap& pixmap);
+    // 直接传递CV::Mat图像加载到场景
+    void loadMatImage(const cv::Mat& srcImg);
+    // 更新图像缩放
+    void updateImageScale();
+    // 将cv::Mat 转换为QPixmap
+    QPixmap matToQPixmap(const cv::Mat& matImg);
+protected:
+    // 重写右键菜单事件
+    void contextMenuEvent(QContextMenuEvent* event) override;
+    // 重写鼠标滚轮事件
+    void wheelEvent(QWheelEvent* event) override;
+protected:
 
-public slots:
-    void slotReciveParamete(std::vector<int> &Para);         // 接收算法参数
-    void slotReciveFile(QString, QString);                   // 接收图片路径和ROI.Json，用于离线测试
-    void slotWriteJson(QJsonObject JsonObj);                 // 接收修改信息并写入json文件
-    void slotReceiveROIJson(std::vector<cv::Rect> roi_data); // 接收ROI.Json信号用于算法检测
-    void slotReceiveTakePhoto(cv::Mat img);                  // 接收拍照图片用于算法检测
-    void slotReceiveSavePicture(cv::Mat img);                // 接收拍照图片并保存
-
-signals:
-    void signal_sent_detect_Image(QImage img);                    // 发送检测后的图片(离线测试)
-    void signal_sentROI_ToDetect(std::vector<cv::Rect> roi_data); // 发送ROI区域信息到后端检测
-    // void signal_sentCameraData_toMainWindow(QJsonObject JsonObj); // 发送曝光时间
-    void signal_sent_Detect_Img(QImage);                          // 发送检测后的图片（算法检测）
+    // 重置缩放
+    void resetZoom();
+private:
+    // 场景
+    QGraphicsScene* m_Scene = nullptr;
+    // 源图像
+    QPixmap m_Pixmap;
+    // 存储缩放比例
+    qreal m_Scale;
+    // 右键菜单
+    QMenu* m_contextMenu = nullptr;
+    QAction* m_resetZoomAction = nullptr;
 };
 
-#endif // RECEIVE_SIGNAL_H
+#endif // DISPLAYIMAGEGRAPHICSVIEW_H
+
+
+
+
+
+
+
