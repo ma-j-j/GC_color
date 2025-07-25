@@ -1,179 +1,104 @@
-#include "qlog4cplus.h"
+#include "DetectionAlgorithm.h"
 
-//类外初始化静态成员
-QLog4cplus QLog4cplus::instance;
-
-QLog4cplus::QLog4cplus()
+DetectionAlgorithm::DetectionAlgorithm(Algorithm_Parameter P)
 {
-    //先判断存储日志文件夹是否存在，不存在则创建
-    QDir dir("logs");
-    if (!dir.exists()) {
-        if (dir.mkpath(".")) {
-        }
-        else {
-        }
+    m_Algorithm_Parameter.chip_binary_high = P.chip_binary_high;
+    m_Algorithm_Parameter.chip_binary_low = P.chip_binary_low;
+    m_Algorithm_Parameter.buckle_binary_high = P.buckle_binary_high;
+    m_Algorithm_Parameter.buckle_binary_low = P.buckle_binary_low;
+    m_Algorithm_Parameter.buckle_height_high = P.buckle_height_high;
+    m_Algorithm_Parameter.buckle_height_low = P.buckle_height_low;
+    m_Algorithm_Parameter.buckle_left_high = P.buckle_left_high;
+    m_Algorithm_Parameter.buckle_left_low = P.buckle_left_low;
+    m_Algorithm_Parameter.buckle_right_high = P.buckle_right_high;
+    m_Algorithm_Parameter.buckle_right_low = P.buckle_right_low;
+    m_Algorithm_Parameter.buckle_width_high = P.buckle_width_high;
+    m_Algorithm_Parameter.buckle_width_low = P.buckle_width_low;
+}
+
+DetectionAlgorithm::~DetectionAlgorithm() {}
+
+cv::Mat DetectionAlgorithm::img_proce(cv::Mat in_img, int low, int high)
+{
+    cv::Mat gray, binary;
+    if (in_img.channels() == 3 || in_img.channels() == 4) {
+        cvtColor(in_img, gray, cv::COLOR_BGR2GRAY);
     } else {
+        gray = in_img; // 如果已经是灰度图像，直接使用
     }
-    //输出到回卷文件
-    log4cplus::SharedAppenderPtr fileAppender(new log4cplus::RollingFileAppender(LOG4CPLUS_TEXT("logs/mylog.log"),50*1024*1024,10));
-    log4cplus::tstring pattern = LOG4CPLUS_TEXT("%D{%m/%d/%y %H:%M:%S,%Q} [%t] %-5p: %m%n");
-    fileAppender->setLayout(std::unique_ptr<log4cplus::Layout>(new log4cplus::PatternLayout(pattern)));
-    this->m_logger = log4cplus::Logger::getRoot();
-    this->m_logger.addAppender(fileAppender);
-//默认状态
-#ifdef QT_DEBUG
-    //Debug模式所有日志打印
-    this->m_logger.setLogLevel(log4cplus::DEBUG_LOG_LEVEL);
-#else
-    //Realse模式只输出info及以上级别的日志
-    this->m_logger.setLogLevel(log4cplus::INFO_LOG_LEVEL);
-#endif
+    threshold(gray, binary, low, high, cv::THRESH_BINARY); // cv::THRESH_BINARY | cv::THRESH_OTSU
+    return binary;
 }
 
-QLog4cplus &QLog4cplus::getQLog4cplusInstance()
+// 通过传入的ROI区域，计算图的上、下底中心点，向左右同时增加left_right_pixel个像素，向上或向下增加up_down_pixel个像素，拿到卡扣的区域
+void DetectionAlgorithm::bunckle_region(cv::Mat in_ROI,
+                                        int left_right_pixel,
+                                        int up_down_pixel,
+                                        cv::Mat &up_bunckle,
+                                        cv::Mat &down_bunckle)
 {
-    return QLog4cplus::instance;
+    // 计算图像的上底和下底的中点
+    int top_mid_x = in_ROI.cols / 2;
+    int bottom_mid_x = in_ROI.cols / 2;
+    int top_y = 0;
+    int bottom_y = in_ROI.rows - 1;
+
+    // 向左右同时加left_right_pixel个像素值
+    int left_x = std::max(0, top_mid_x - left_right_pixel);
+    int right_x = std::min(in_ROI.cols - 1, top_mid_x + left_right_pixel);
+
+    // 扣出上底区域并向下加up_down_pixel个像素
+    int top_height = std::min(up_down_pixel, bottom_y - top_y); // 确保不超出图像范围
+    cv::Rect top_rect(left_x, top_y, right_x - left_x, top_height);
+    up_bunckle = in_ROI(top_rect).clone();
+
+    // 扣出下底区域并向上加up_down_pixel个像素
+    int bottom_height = std::min(up_down_pixel, bottom_y - top_y); // 确保不超出图像范围
+    cv::Rect bottom_rect(left_x, bottom_y - bottom_height + 1, right_x - left_x, bottom_height);
+    down_bunckle = in_ROI(bottom_rect).clone();
 }
 
-QLog4cplus::~QLog4cplus()
+void DetectionAlgorithm::Detect(cv::Mat &in_ROI,
+                                cv::Mat &origin_img,
+                                cv::Rect roiRect,
+                                int imageIndex,
+                                QString &ErrorInformation)
 {
-    // 关闭log4cplus
-    log4cplus::Logger::shutdown();
+    qDebug() << "调用基类检测算法";
 }
 
-void QLog4cplus::setQlogLevel(QLog4cplus::Level level)
+void LoaderMode_Before::Detect(cv::Mat &in_ROI,
+                               cv::Mat &origin_img,
+                               cv::Rect roiRect,
+                               int imageIndex,
+                               QString &ErrorInformation)
 {
-    switch (level)
-    {
-    case QLog4cplus::Level::l_DEBUG:
-        this->m_logger.setLogLevel(log4cplus::DEBUG_LOG_LEVEL);
-        break;
-    case QLog4cplus::Level::l_INFO:
-        this->m_logger.setLogLevel(log4cplus::INFO_LOG_LEVEL);
-        break;
-    case QLog4cplus::Level::l_WARN:
-        this->m_logger.setLogLevel(log4cplus::WARN_LOG_LEVEL);
-        break;
-    case QLog4cplus::Level::l_ERROR:
-        this->m_logger.setLogLevel(log4cplus::ERROR_LOG_LEVEL);
-        break;
-    default:
-        break;
-    }
+    qDebug() << "调用上料前检测算法";
 }
 
-void QLog4cplus::setQUIlogLevel(QLog4cplus::Level level)
+void LoaderMode_After::Detect(cv::Mat &in_ROI,
+                              cv::Mat &origin_img,
+                              cv::Rect roiRect,
+                              int imageIndex,
+                              QString &ErrorInformation)
 {
-    this->m_UIlogLevel = level;
+    qDebug() << "调用上料后检测算法";
 }
 
-void QLog4cplus::writeLog(QLog4cplus::Level level,const char* message)
+void CuttingMode_Before::Detect(cv::Mat &in_ROI,
+                                cv::Mat &origin_img,
+                                cv::Rect roiRect,
+                                int imageIndex,
+                                QString &ErrorInformation)
 {
-    //上锁，确保每次只有一条写入
-    std::lock_guard<std::mutex> lock(this->m_mtx);
-    QString timestamp = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss");
-    QString logLevel = this->levelToString(level);
-    QString logMessage = QString("%1 %2 :%3 ")
-                            .arg(timestamp)
-                            .arg(logLevel)
-                            .arg(message);
-    qDebug()<<logMessage;
-    if(level >= m_UIlogLevel)
-    {   //同步到UI界面
-        emit this->signalLogOutput(level,logMessage);
-    }
-    else
-    {
-        //不同步到UI界面
-    }
-    switch (level)
-    {
-    case QLog4cplus::Level::l_DEBUG:
-        LOG4CPLUS_DEBUG(this->m_logger,message);
-        break;
-    case QLog4cplus::Level::l_INFO:
-        LOG4CPLUS_INFO(this->m_logger,message);
-        break;
-    case QLog4cplus::Level::l_WARN:
-        LOG4CPLUS_WARN(this->m_logger,message);
-        break;
-    case QLog4cplus::Level::l_ERROR:
-        LOG4CPLUS_ERROR(this->m_logger,message);
-        break;
-    default:
-        break;
-    }
+    qDebug() << "调用下料前检测算法";
 }
 
-void QLog4cplus::onlyWriteLog(QLog4cplus::Level level, const char *message)
+void CuttingMode_After::Detect(cv::Mat &in_ROI,
+                               cv::Mat &origin_img,
+                               cv::Rect roiRect,
+                               int imageIndex,
+                               QString &ErrorInformation)
 {
-    //上锁，确保每次只有一条写入
-    std::lock_guard<std::mutex> lock(this->m_mtxOnly);
-    switch (level)
-    {
-    case QLog4cplus::Level::l_DEBUG:
-        LOG4CPLUS_DEBUG(this->m_logger,message);
-        break;
-    case QLog4cplus::Level::l_INFO:
-        LOG4CPLUS_INFO(this->m_logger,message);
-        break;
-    case QLog4cplus::Level::l_WARN:
-        LOG4CPLUS_WARN(this->m_logger,message);
-        break;
-    case QLog4cplus::Level::l_ERROR:
-        LOG4CPLUS_ERROR(this->m_logger,message);
-        break;
-    default:
-        break;
-    }
+    qDebug() << "调用下料后检测算法";
 }
-
-QString QLog4cplus::levelToString(QLog4cplus::Level level)
-{
-    switch (level)
-    {
-    case QLog4cplus::Level::l_DEBUG:
-        return "[Debug]";
-        break;
-    case QLog4cplus::Level::l_INFO:
-        return "[Info]";
-        break;
-    case QLog4cplus::Level::l_WARN:
-        return "[Warn]";
-        break;
-    case QLog4cplus::Level::l_ERROR:
-        return "[Error]";
-        break;
-    default:
-        break;
-    }
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
