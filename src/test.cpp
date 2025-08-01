@@ -21,24 +21,25 @@ AlgorithmParameterView::~AlgorithmParameterView()
 void AlgorithmParameterView::slots_AlgorithmParameterView_On_PushButton_SaveParame_Clecked()
 {
     try {
-        // 创建一个空的JsonObj
-        QJsonObject jsonObject;
-        // 将界面的参数读取并加入JsonObj
-        jsonObject["chip_binary_low"] = this->ui->spinBox_BGA63_chip_binary_low->value();
-        jsonObject["chip_binary_high"] = this->ui->spinBox_BGA63_chip_binary_high->value();
-        jsonObject["buckle_binary_low"] = this->ui->spinBox_BGA63_buckle_binary_low->value();
-        jsonObject["buckle_binary_high"] = this->ui->spinBox_BGA63_buckle_binary_high->value();
-        jsonObject["buckle_width_low"] = this->ui->spinBox_BGA63_buckle_width_low->value();
-        jsonObject["buckle_width_high"] = this->ui->spinBox_BGA63_buckle_width_high->value();
-        jsonObject["buckle_height_low"] = this->ui->spinBox_BGA63_buckle_height_low->value();
-        jsonObject["buckle_height_high"] = this->ui->spinBox_BGA63_buckle_height_high->value();
-        jsonObject["buckle_left_low"] = this->ui->spinBox_BGA63_buckle_left_low->value();
-        jsonObject["buckle_left_high"] = this->ui->spinBox_BGA63_buckle_left_high->value();
-        jsonObject["buckle_right_low"] = this->ui->spinBox_BGA63_buckle_right_low->value();
-        jsonObject["buckle_right_high"] = this->ui->spinBox_BGA63_buckle_right_high->value();
+        if (this->m_BIBBoradTypeName == "BGA63") {
+            // 创建一个空的JsonObj
+            QJsonObject jsonObject;
+            // 将界面的参数读取并加入JsonObj
+            jsonObject["chip_binary_low"] = this->ui->spinBox_BGA63_chip_binary_low->value();
+            jsonObject["chip_binary_high"] = this->ui->spinBox_BGA63_chip_binary_high->value();
+            jsonObject["buckle_binary_low"] = this->ui->spinBox_BGA63_buckle_binary_low->value();
+            jsonObject["buckle_binary_high"] = this->ui->spinBox_BGA63_buckle_binary_high->value();
+            jsonObject["buckle_width_low"] = this->ui->spinBox_BGA63_buckle_width_low->value();
+            jsonObject["buckle_width_high"] = this->ui->spinBox_BGA63_buckle_width_high->value();
+            jsonObject["buckle_height_low"] = this->ui->spinBox_BGA63_buckle_height_low->value();
+            jsonObject["buckle_height_high"] = this->ui->spinBox_BGA63_buckle_height_high->value();
+            jsonObject["buckle_left_low"] = this->ui->spinBox_BGA63_buckle_left_low->value();
+            jsonObject["buckle_left_high"] = this->ui->spinBox_BGA63_buckle_left_high->value();
+            jsonObject["buckle_right_low"] = this->ui->spinBox_BGA63_buckle_right_low->value();
+            jsonObject["buckle_right_high"] = this->ui->spinBox_BGA63_buckle_right_high->value();
 
-        emit this->signals_AlgorithmParameterView_Sent_SaveParamJson(jsonObject);
-
+            emit this->signals_AlgorithmParameterView_Sent_SaveParamJson(jsonObject);
+        }
     } catch (...) {
         My_LOG(QLOG_ERROR,u8"AlgorithmParameterView::slotAlgorithmParameterView_On_PushButton_SaveParame_Clecked 异常");
     }
