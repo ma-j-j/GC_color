@@ -168,36 +168,36 @@ void AlgorithmParameterView::controlInit()
     this->ui->comboBox_BIBBoradType->addItem("WSON8");
     this->ui->comboBox_BIBBoradType->addItem("SOIC16");
 
-    // // 芯片二值化阈值
-    // this->ui->spinBox_chip_binary_low->setRange(0, 255);
-    // this->ui->spinBox_chip_binary_low->setSingleStep(1);
-    // this->ui->spinBox_chip_binary_high->setRange(0, 255);
-    // this->ui->spinBox_chip_binary_high->setSingleStep(1);
-    // // 卡扣二值化阈值
-    // this->ui->spinBox_buckle_binary_low->setRange(0, 255);
-    // this->ui->spinBox_buckle_binary_low->setSingleStep(1);
-    // this->ui->spinBox_buckle_binary_high->setRange(0, 255);
-    // this->ui->spinBox_buckle_binary_high->setSingleStep(1);
-    // // 卡扣宽度阈值
-    // this->ui->spinBox_buckle_width_low->setRange(0, 1000);
-    // this->ui->spinBox_buckle_width_low->setSingleStep(1);
-    // this->ui->spinBox_buckle_width_high->setRange(0, 1000);
-    // this->ui->spinBox_buckle_width_high->setSingleStep(1);
-    // // 卡扣高度阈值
-    // this->ui->spinBox_buckle_height_low->setRange(0, 1000);
-    // this->ui->spinBox_buckle_height_low->setSingleStep(1);
-    // this->ui->spinBox_buckle_height_high->setRange(0, 1000);
-    // this->ui->spinBox_buckle_height_high->setSingleStep(1);
-    // // 卡扣左边差值阈值最小值
-    // this->ui->spinBox_buckle_left_low->setRange(0, 1000);
-    // this->ui->spinBox_buckle_left_low->setSingleStep(1);
-    // this->ui->spinBox_buckle_left_high->setRange(0, 1000);
-    // this->ui->spinBox_buckle_left_high->setSingleStep(1);
-    // // 卡扣右边差值阈值最小值
-    // this->ui->spinBox_buckle_right_low->setRange(0, 1000);
-    // this->ui->spinBox_buckle_right_low->setSingleStep(1);
-    // this->ui->spinBox_buckle_right_high->setRange(0, 1000);
-    // this->ui->spinBox_buckle_right_high->setSingleStep(1);
+    // 芯片二值化阈值
+    this->ui->spinBox_BGA63_chip_binary_low->setRange(0, 255);
+    this->ui->spinBox_BGA63_chip_binary_low->setSingleStep(1);
+    this->ui->spinBox_BGA63_chip_binary_high->setRange(0, 255);
+    this->ui->spinBox_BGA63_chip_binary_high->setSingleStep(1);
+    // 卡扣二值化阈值
+    this->ui->spinBox_BGA63_buckle_binary_low->setRange(0, 255);
+    this->ui->spinBox_BGA63_buckle_binary_low->setSingleStep(1);
+    this->ui->spinBox_BGA63_buckle_binary_high->setRange(0, 255);
+    this->ui->spinBox_BGA63_buckle_binary_high->setSingleStep(1);
+    // 卡扣宽度阈值
+    this->ui->spinBox_BGA63_buckle_width_low->setRange(0, 1000);
+    this->ui->spinBox_BGA63_buckle_width_low->setSingleStep(1);
+    this->ui->spinBox_BGA63_buckle_width_high->setRange(0, 1000);
+    this->ui->spinBox_BGA63_buckle_width_high->setSingleStep(1);
+    // 卡扣高度阈值
+    this->ui->spinBox_BGA63_buckle_height_low->setRange(0, 1000);
+    this->ui->spinBox_BGA63_buckle_height_low->setSingleStep(1);
+    this->ui->spinBox_BGA63_buckle_height_high->setRange(0, 1000);
+    this->ui->spinBox_BGA63_buckle_height_high->setSingleStep(1);
+    // 卡扣左边差值阈值最小值
+    this->ui->spinBox_BGA63_buckle_left_low->setRange(0, 1000);
+    this->ui->spinBox_BGA63_buckle_left_low->setSingleStep(1);
+    this->ui->spinBox_BGA63_buckle_left_high->setRange(0, 1000);
+    this->ui->spinBox_BGA63_buckle_left_high->setSingleStep(1);
+    // 卡扣右边差值阈值最小值
+    this->ui->spinBox_BGA63_buckle_right_low->setRange(0, 1000);
+    this->ui->spinBox_BGA63_buckle_right_low->setSingleStep(1);
+    this->ui->spinBox_BGA63_buckle_right_high->setRange(0, 1000);
+    this->ui->spinBox_BGA63_buckle_right_high->setSingleStep(1);
 
     connect(this->ui->pushButton_SaveAlgorithmParameter,
             &QPushButton::clicked,
