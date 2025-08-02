@@ -1,220 +1,283 @@
-#include "Read_JsonFile.h"
+#include "AlgorithmParameterView.h"
+#include "ui_AlgorithmParameterView.h"
 
-Read_JsonFile::Read_JsonFile(QObject *parent)
-    : QObject{parent}
-{}
-
-void Read_JsonFile::read_ROIJson()
+AlgorithmParameterView::AlgorithmParameterView(QWidget *parent)
+    : QWidget(parent)
+    , ui(new Ui::AlgorithmParameterView)
 {
-    QString dir_path = "../../JsonFiles/"; // JSON 文件目录
-    QString prefix = "ROI_";               // 文件前缀
-    QString suffix = ".json";              // 文件后缀
+    ui->setupUi(this);
 
-    QDir json_dir(dir_path);
-    if (!json_dir.exists()) {
-        qDebug() << "JSON 文件目录不存在:" << dir_path;
-        return;
-    }
-
-    // 设置文件名过滤规则（匹配 "ROI_*.json"）
-    QStringList filters;
-    filters << prefix + "*" + suffix;
-    json_dir.setNameFilters(filters);
-    QFileInfoList file_list = json_dir.entryInfoList();
-
-    if (file_list.isEmpty()) {
-        qDebug() << "未找到匹配的 ROI JSON 文件:" << dir_path + prefix + "*" + suffix;
-        return;
-    }
-
-    // 定义存储结构：类型名（如 "BGA63"） -> ROI 数据
-    std::map<QString, std::vector<cv::Rect>> roi_data_per_file;
-
-    // 遍历所有匹配的文件
-    for (const QFileInfo &file_info : file_list) {
-        QString file_name = file_info.fileName(); // 获取文件名
-
-        // 从文件名中提取类型名（去掉 "ROI_" 前缀和 ".json" 后缀）
-        QString type_name = file_name;
-        type_name.remove(0, prefix.length()); // 去掉 "ROI_"
-        type_name.chop(suffix.length());      // 去掉 ".json"
-
-        // 调用 Extract_RoiRegion 提取 ROI 数据
-        std::vector<cv::Rect> current_roi_data;
-        try {
-            this->Extract_RoiRegion(file_info.absoluteFilePath(), current_roi_data);
-        } catch (const std::exception &e) {
-            std::string error = "解析 ROI 文件失败:" + file_name.toStdString() + "错误:" + e.what();
-            My_LOG(QLog4cplus::Level::l_ERROR, error.c_str());
-            continue; // 跳过当前文件
-        }
-
-        // 将 ROI 数据存入映射表（键为类型名）
-        roi_data_per_file[type_name] = current_roi_data;
-    }
-    My_LOG(QLog4cplus::Level::l_INFO, u8"成功读取所有ROI_JSON文件的数据");
-
-    // 发送映射表（类型名 -> ROI 数据）
-    emit this->signals_Model_Sent_RoiData(roi_data_per_file);
+    // 控件初始化
+    this->controlInit();
+    // 控件样式初始化
+    this->controlStyleInit();
 }
 
-void Read_JsonFile::read_AlgorithmParameterJson()
+AlgorithmParameterView::~AlgorithmParameterView()
+{
+    delete ui;
+}
+
+void AlgorithmParameterView::slots_AlgorithmParameterView_On_PushButton_SaveParame_Clecked()
 {
     try {
-        QString dir_path = "../../JsonFiles/";  // JSON 文件目录
-        QString prefix = "AlgorithmParameter_"; // 文件前缀
-        QString suffix = ".json";               // 文件后缀
+        if (this->m_BIBBoradTypeName == "BGA63") {
+            // 创建一个空的JsonObj
+            QJsonObject jsonObject;
+            // 将界面的参数读取并加入JsonObj
+            jsonObject["chip_binary_low"] = this->ui->spinBox_BGA63_chip_binary_low->value();
+            jsonObject["chip_binary_high"] = this->ui->spinBox_BGA63_chip_binary_high->value();
+            jsonObject["buckle_binary_low"] = this->ui->spinBox_BGA63_buckle_binary_low->value();
+            jsonObject["buckle_binary_high"] = this->ui->spinBox_BGA63_buckle_binary_high->value();
+            jsonObject["buckle_width_low"] = this->ui->spinBox_BGA63_buckle_width_low->value();
+            jsonObject["buckle_width_high"] = this->ui->spinBox_BGA63_buckle_width_high->value();
+            jsonObject["buckle_height_low"] = this->ui->spinBox_BGA63_buckle_height_low->value();
+            jsonObject["buckle_height_high"] = this->ui->spinBox_BGA63_buckle_height_high->value();
+            jsonObject["buckle_left_low"] = this->ui->spinBox_BGA63_buckle_left_low->value();
+            jsonObject["buckle_left_high"] = this->ui->spinBox_BGA63_buckle_left_high->value();
+            jsonObject["buckle_right_low"] = this->ui->spinBox_BGA63_buckle_right_low->value();
+            jsonObject["buckle_right_high"] = this->ui->spinBox_BGA63_buckle_right_high->value();
 
-        QDir json_dir(dir_path);
-        if (!json_dir.exists()) {
-            qDebug() << "JSON 文件目录不存在:" << dir_path;
-            return;
+            // emit this->signals_AlgorithmParameterView_Sent_SaveParamJson(jsonObject);
         }
-
-        // 设置文件名过滤规则（匹配 "Algorithm_Parameter_*.json"）
-        QStringList filters;
-        filters << prefix + "*" + suffix;
-        json_dir.setNameFilters(filters);
-        QFileInfoList file_list = json_dir.entryInfoList();
-
-        if (file_list.isEmpty()) {
-            qDebug() << "未找到匹配的 Algorithm_Parameter JSON 文件:"
-                     << dir_path + prefix + "*" + suffix;
-            return;
-        }
-
-        // 定义存储结构：类型名（如 "BGA63"） -> ROI 数据
-        std::map<QString, QJsonObject> algorithm_parameter;
-
-        // 遍历所有匹配的文件
-        for (const QFileInfo &file_info : file_list) {
-            QString file_name = file_info.fileName(); // 获取文件名
-            QJsonObject jsonObj;
-            // 从文件名中提取类型名（去掉 "Algorithm_Parameter_" 前缀和 ".json" 后缀）
-            QString type_name = file_name;
-            type_name.remove(0, prefix.length()); // 去掉 "Algorithm_Parameter_"
-            type_name.chop(suffix.length());      // 去掉 ".json"
-
-            // 将 ROI 数据存入映射表（键为类型名）
-            algorithm_parameter[type_name] = jsonObj;
-        }
-        My_LOG(QLog4cplus::Level::l_INFO, u8"成功读取所有ROI_JSON文件的数据");
-
-        // emit this->signals_Model_Sent_AlgorithmParameter(jsonObj);
-        My_LOG(QLog4cplus::Level::l_INFO, u8"成功读取算法参数Json文件的数据");
-    } catch (const std::exception &e) {
-        My_LOG(QLog4cplus::Level::l_ERROR, u8"解析算法参数Json文件错误");
+    } catch (...) {
+        My_LOG(QLOG_ERROR,u8"AlgorithmParameterView::slotAlgorithmParameterView_On_PushButton_SaveParame_Clecked 异常");
     }
 }
 
-void Read_JsonFile::read_OtherConfigJson()
+// 接收后端算法参数到前端页面进行显示
+void AlgorithmParameterView::slots_AlgorithmParameterView_Receive_AlgorithmParameterModel(
+    std::map<QString, QJsonObject> &algorithmParams, QString &type_name)
 {
-    try {
-        QJsonObject jsonObj = readJsonFile("../../JsonFiles/OtherConfig.json");
-        My_LOG(QLog4cplus::Level::l_INFO, u8"成功读取其他参数Json文件的数据");
-        emit this->signals_Model_Sent_OtherConfigParameter(jsonObj);
-    } catch (const std::exception &e) {
-        My_LOG(QLog4cplus::Level::l_ERROR, u8"解析其他参数Json文件错误");
-    }
-}
+    for (const auto &boardPair : algorithmParams) {
+        const QString &boardType = boardPair.first;      // 如 "BGA63"
+        const QJsonObject &paramJson = boardPair.second; // 如 {"chip_binary_low":10, ...}
 
-QJsonObject Read_JsonFile::readJsonFile(const QString &filePath)
-{
-    QFile file(filePath);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        qWarning() << "无法打开文件:" << file.errorString();
-        return QJsonObject();
-    }
+        // 查找该板型是否在映射表中
+        auto it = boardTypeToControls.find(boardType);
+        if (it == boardTypeToControls.end()) {
+            // My_LOG(QLOG_WARN, QString("未找到板型 '%1' 的控件映射").arg(boardType));
+            continue;
+        }
 
-    QByteArray jsonData = file.readAll();
-    file.close();
+        BoardControlMap &controlMap = it->second;
 
-    QJsonParseError parseError;
-    QJsonDocument jsonDoc = QJsonDocument::fromJson(jsonData, &parseError);
+        // 切换到对应页面
+        this->ui->stackedWidget->setCurrentWidget(controlMap.page);
 
-    if (jsonDoc.isNull()) {
-        qWarning() << "JSON 解析失败:" << parseError.errorString();
-        return QJsonObject();
-    }
-    if (!jsonDoc.isObject()) {
-        qWarning() << "JSON 文档不是一个对象";
-        return QJsonObject();
-    }
-    return jsonDoc.object();
-}
+        // 遍历该板型的所有参数，并尝试设置到对应的 spinBox 上
+        for (auto jsonIt = paramJson.begin(); jsonIt != paramJson.end(); ++jsonIt) {
+            const QString &paramName = jsonIt.key(); // 如 "chip_binary_low"
+            QJsonValue value = jsonIt.value();
 
-void Read_JsonFile::Extract_RoiRegion(const QString &filePath, std::vector<cv::Rect> &roi_container)
-{
-    QFile file(filePath);
-    if (!file.open(QIODevice::ReadOnly)) {
-        qWarning() << "无法打开文件";
-        return;
-    }
-
-    QJsonParseError parseError;
-    QJsonDocument doc = QJsonDocument::fromJson(file.readAll(), &parseError);
-    file.close();
-
-    if (parseError.error != QJsonParseError::NoError) {
-        qWarning() << "JSON解析错误:" << parseError.errorString();
-        return;
-    }
-
-    QJsonObject root = doc.object();
-    QRegularExpression re("roi(\\d+)");
-    QList<QPair<int, QString>> sortedKeys;
-
-    for (const QString &key : root.keys()) {
-        QRegularExpressionMatch match = re.match(key);
-        if (match.hasMatch()) {
-            bool ok;
-            int num = match.captured(1).toInt(&ok);
-            if (ok) {
-                sortedKeys.append(qMakePair(num, key));
-            } else {
-                qWarning() << "无效的数字序号:" << key;
+            if (!value.isDouble()) {
+                // My_LOG(QLOG_WARN, QString("参数 '%1' 不是数字类型").arg(paramName));
+                continue;
             }
-        } else {
-            qWarning() << "跳过未命名的键:" << key;
+
+            int intValue = value.toInt(); // QSpinBox 需要 int
+
+            // 查找该参数名对应的控件
+            auto spinBoxIt = controlMap.spinBoxMap.find(paramName);
+            if (spinBoxIt != controlMap.spinBoxMap.end() && spinBoxIt->second) {
+                spinBoxIt->second->setValue(intValue); // 设置值
+            } else {
+                // My_LOG(QLOG_WARN, QString("未找到控件: 参数 '%1' 对应的 SpinBox").arg(paramName));
+            }
         }
     }
+}
 
-    // 按自然顺序排序
-    std::sort(sortedKeys.begin(),
-              sortedKeys.end(),
-              [](const QPair<int, QString> &a, const QPair<int, QString> &b) {
-                  return a.first < b.first;
-              });
+void AlgorithmParameterView::slots_AlgorithmParameterView_Receive_BIBBoard_TypeChanged(int type_index)
+{ // 通过索引获取当前选中的文本
+    QString selectedText = this->ui->comboBox_BIBBoradType->itemText(type_index);
+    this->m_BIBBoradTypeIndex = type_index;
+    this->m_BIBBoradTypeName = selectedText;
+    if (selectedText == "BGA63") {
+        this->ui->stackedWidget->setCurrentWidget(this->ui->page1_BGA63);
+    } else if (selectedText == "BGA154") {
+        this->ui->stackedWidget->setCurrentWidget(this->ui->page2_BGA154);
+    } else if (selectedText == "WSON8") {
+        this->ui->stackedWidget->setCurrentWidget(this->ui->page3_WSON8);
+    } else if (selectedText == "SOIC16") {
+        this->ui->stackedWidget->setCurrentWidget(this->ui->page4_SOIC16);
+    }
+}
 
-    // 处理排序后的ROI数据
-    for (const auto &keyPair : sortedKeys) {
-        const QString &key = keyPair.second;
-        QJsonValue value = root.value(key);
+void AlgorithmParameterView::controlInit()
+{
+    this->ui->stackedWidget->setCurrentWidget(this->ui->page1_BGA63);
+    this->ui->comboBox_BIBBoradType->addItem("BGA63");
+    this->ui->comboBox_BIBBoradType->addItem("BGA154");
+    this->ui->comboBox_BIBBoradType->addItem("WSON8");
+    this->ui->comboBox_BIBBoradType->addItem("SOIC16");
 
-        if (!value.isArray()) {
-            qWarning() << "键" << key << "的值不是数组";
-            continue;
+    this->QSpinBoxInit();  // QSpinBox 初始化
+    this->BoardTypeInit(); // 映射表初始化
+
+    connect(this->ui->pushButton_SaveAlgorithmParameter,
+            &QPushButton::clicked,
+            this,
+            &AlgorithmParameterView::slots_AlgorithmParameterView_On_PushButton_SaveParame_Clecked);
+    // 接收BIB板的型号
+    connect(this->ui->comboBox_BIBBoradType,
+            static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+            this,
+            &AlgorithmParameterView::slots_AlgorithmParameterView_Receive_BIBBoard_TypeChanged);
+}
+
+void AlgorithmParameterView::QSpinBoxInit()
+{
+    // 初始化QSpinBox
+    QList<QSpinBox *> spinBoxes = this->findChildren<QSpinBox *>();
+    for (QSpinBox *spinBox : spinBoxes) {
+        QString name = spinBox->objectName();
+
+        // 判断是否是你要初始化的控件，比如名称中包含 "chip_binary_low" 或 "chip_binary_high"
+        if (name.contains("chip_binary_low") || name.contains("chip_binary_high")
+            || name.contains("buckle_binary_low") || name.contains("buckle_binary_high")) {
+            spinBox->setRange(0, 255);
+            spinBox->setSingleStep(1);
+            qDebug() << "已初始化:" << name;
         }
 
-        QJsonArray arr = value.toArray();
-        if (arr.size() != 4) {
-            qWarning() << "键" << key << "的数组长度应为4, 实际为" << arr.size();
-            continue;
+        if (name.contains("buckle_width_low") || name.contains("buckle_width_high")
+            || name.contains("buckle_height_low") || name.contains("buckle_height_high")) {
+            spinBox->setRange(0, 1000);
+            spinBox->setSingleStep(1);
+            qDebug() << "已初始化:" << name;
         }
+    }
+}
 
-        // 提取坐标参数
-        int x = arr[0].toInt(-1);
-        int y = arr[1].toInt(-1);
-        int width = arr[2].toInt(-1);
-        int height = arr[3].toInt(-1);
+void AlgorithmParameterView::BoardTypeInit()
+{
+    // 构建 BGA63 的控件映射
+    BoardControlMap bga63Map;
+    bga63Map.page = this->ui->page1_BGA63;
 
-        // 验证参数有效性
-        if (x < 0 || y < 0 || width <= 0 || height <= 0) {
-            qWarning() << "无效的ROI参数:" << key << x << y << width << height;
-            continue;
+    bga63Map.spinBoxMap["chip_binary_low"] = this->ui->spinBox_BGA63_chip_binary_low;
+    bga63Map.spinBoxMap["chip_binary_high"] = this->ui->spinBox_BGA63_chip_binary_high;
+    bga63Map.spinBoxMap["buckle_binary_low"] = this->ui->spinBox_BGA63_buckle_binary_low;
+    bga63Map.spinBoxMap["buckle_binary_high"] = this->ui->spinBox_BGA63_buckle_binary_high;
+    bga63Map.spinBoxMap["buckle_height_low"] = this->ui->spinBox_BGA63_buckle_height_low;
+    bga63Map.spinBoxMap["buckle_height_high"] = this->ui->spinBox_BGA63_buckle_height_high;
+    bga63Map.spinBoxMap["buckle_left_low"] = this->ui->spinBox_BGA63_buckle_left_low;
+    bga63Map.spinBoxMap["buckle_left_high"] = this->ui->spinBox_BGA63_buckle_left_high;
+    bga63Map.spinBoxMap["buckle_right_low"] = this->ui->spinBox_BGA63_buckle_right_low;
+    bga63Map.spinBoxMap["buckle_right_high"] = this->ui->spinBox_BGA63_buckle_right_high;
+    bga63Map.spinBoxMap["buckle_width_low"] = this->ui->spinBox_BGA63_buckle_width_low;
+    bga63Map.spinBoxMap["buckle_width_high"] = this->ui->spinBox_BGA63_buckle_width_high;
+
+    // 构建 BGA154 的控件映射
+    BoardControlMap bga154Map;
+    bga154Map.page = this->ui->page2_BGA154;
+    bga154Map.spinBoxMap["chip_binary_low"] = this->ui->spinBox_BGA154_chip_binary_low;
+    bga154Map.spinBoxMap["chip_binary_high"] = this->ui->spinBox_BGA154_chip_binary_high;
+    // ... 添加 BGA154 的其它控件
+
+    // 构建 WSON8 的控件映射
+
+    // 构建 SOIC16 的控件映射
+
+    // 将板型与控件映射表存入全局 map
+    boardTypeToControls["BGA63"] = bga63Map;
+    boardTypeToControls["BGA154"] = bga154Map;
+    // 继续添加 WSON8, SOIC16...
+}
+
+void AlgorithmParameterView::controlStyleInit()
+{
+    // QPushButton样式表设置
+    QString buttonStyle = (R"(
+        QPushButton {
+            font-family: 'Microsoft YaHei';
+            border: 2px solid #696969; /* #92bd6c; */
+            color: black;
+            padding: 2px 3px;
+            font-size: 16px;
+            border-radius: 4px;
         }
-        // 创建并验证ROI范围
-        cv::Rect roi(x, y, width, height);
-        roi_container.push_back(roi);
+        QPushButton:hover {
+            background-color: #E0E0E0; /* 浅灰 */
+            color: black;
+        }
+        QPushButton:pressed {
+            background-color: #696969; /* 点击时背景颜色为黑色 */
+        }
+    )");
+
+    // QGroupBox样式表设置
+    QString groupBoxStyle = (R"(
+        QGroupBox {
+            border: 2px solid #888;         /* 边框粗细和颜色 */
+            border-radius: 3px;             /* 边框圆角半径 */
+            margin-top: 6px;
+        }
+        QGroupBox::title {
+            color: #000000;                 /* 标题文字颜色 */
+            font-size: 14px;                /* 字体大小 */
+            subcontrol-origin: margin;      /* 标题定位基准（margin/padding/content） */
+            subcontrol-position: top left;  /* 标题位置 */
+            padding: 0 3px;                 /* 标题内边距 */
+            left: 10px;                     /* 水平偏移（相对 subcontrol-origin） */
+        }
+    )");
+    // QComboBox样式表设置
+    QString comboBoxStyle(R"(
+        QComboBox {                         /* 基础样式 */
+            font-family: 'Microsoft YaHei';
+            background-color: #EFEEEE;      /* 背景色 */
+            color: #000000;                 /* 文字颜色 */
+            font-size: 15px;                /* 字号 */
+            border: 1px solid #696969;      /* 边框 */
+            border-radius: 4px;             /* 圆角 */
+            padding: 1px;                   /* 内边距 */
+        }
+        QComboBox::drop-down {              /* 下拉按钮左侧 */
+            subcontrol-origin: padding;     /* 定位基准 */
+            subcontrol-position: right;     /* 位置 */
+            width: 20px;                    /* 按钮宽度 */
+            border-left: 1px solid #CCC;    /* 左侧分隔线 */
+        }
+        QComboBox::down-arrow {             /* 下拉按钮右侧 */
+            width: 16px;
+            height: 16px;
+            image: url(:/Image/OtherConfigViewResources/下拉箭头.svg);  /* 自定义箭头图标 */
+        }
+        QComboBox QAbstractItemView {       /* 下拉列表 */
+            background: #E1E1E1;            /* 下拉列表背景 */
+            border: 1px solid #CCC;         /* 下拉列表边框 */
+            selection-background-color: #A0A0A0;    /* 下拉列表选中项背景 */
+            selection-color: white;         /* 下拉列表选中项颜色 */
+            outline: 0;                     /* 去除虚线框 */
+        }
+        QComboBox:hover {       /* 鼠标悬停 */
+            background-color: #C0C0C0;      /* 背景颜色 */
+        }
+    )");
+
+    this->applyStyleToWidget(this->ui->pushButton_SaveAlgorithmParameter, buttonStyle);
+    this->applyStyleToWidget(this->ui->comboBox_BIBBoradType, comboBoxStyle);
+
+    this->applyStyleToWidget(this->ui->groupBox_BGA63_BuckleParameter, groupBoxStyle);
+    this->applyStyleToWidget(this->ui->groupBox_BGA63_ChipParameter, groupBoxStyle);
+
+    this->applyStyleToWidget(this->ui->groupBox_BGA154_BuckleParameter, groupBoxStyle);
+    this->applyStyleToWidget(this->ui->groupBox_BGA154_ChipParameter, groupBoxStyle);
+
+    this->applyStyleToWidget(this->ui->groupBox_WSON8_BuckleParameter, groupBoxStyle);
+    this->applyStyleToWidget(this->ui->groupBox_WSON8_ChipParameter, groupBoxStyle);
+
+    this->applyStyleToWidget(this->ui->groupBox_SOIC16_BuckleParameter, groupBoxStyle);
+    this->applyStyleToWidget(this->ui->groupBox_SOIC16_ChipParameter, groupBoxStyle);
+}
+
+void AlgorithmParameterView::applyStyleToWidget(QWidget *widget, const QString &qssStyle)
+{
+    if (widget) { // 检查控件是否有效
+        widget->setStyleSheet(qssStyle);
+    } else {
+        qDebug() << "警告：传入的控件指针为空！";
     }
 }
