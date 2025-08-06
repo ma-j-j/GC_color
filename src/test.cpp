@@ -179,6 +179,8 @@ void AlgorithmParameterView::BoardTypeInit()
     bga63Map.spinBoxMap["chip_half_height"] = this->ui->spinBox_BGA63_chip_half_height;
     bga63Map.spinBoxMap["chip_exist_low"] = this->ui->spinBox_BGA63_chip_exist_low;
     bga63Map.spinBoxMap["chip_exist_high"] = this->ui->spinBox_BGA63_chip_exist_high;
+    this->ui->radioButton_BGA63_buckle_left_right;
+    this->ui->radioButton_BGA63_buckle_up_down;
     bga63Map.spinBoxMap["buckle_half_width"] = this->ui->spinBox_BGA63_buckle_half_width;
     bga63Map.spinBoxMap["buckle_half_height"] = this->ui->spinBox_BGA63_buckle_half_height;
     bga63Map.spinBoxMap["buckle_binary_low"] = this->ui->spinBox_BGA63_buckle_binary_low;
