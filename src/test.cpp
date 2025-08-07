@@ -35,13 +35,34 @@ void AlgorithmParameterView::slots_AlgorithmParameterView_On_PushButton_SavePara
         for (const auto &paramPair : controlMap.spinBoxMap) {
             const QString &paramName = paramPair.first; // 如 "chip_binary_low"
             QSpinBox *spinBox = paramPair.second;       // 对应的 QSpinBox*
-
             if (spinBox) {
                 jsonObject[paramName] = spinBox->value(); // 读取值并存入 JSON
             } else {
                 // My_LOG(QLOG_WARN, QString("控件指针为空: 参数 '%1' 对应的 SpinBox").arg(paramName));
             }
         }
+        // 保存卡扣方向
+        bool buckleDirection = false; // 默认是上下方向
+        auto radioItLeftRight = controlMap.radioButtonMap.find("buckle_left_right");
+        auto radioItUpDown = controlMap.radioButtonMap.find("buckle_up_down");
+        QRadioButton *leftRightRadio = nullptr;
+        QRadioButton *upDownRadio = nullptr;
+        if (radioItLeftRight != controlMap.radioButtonMap.end()) {
+            leftRightRadio = radioItLeftRight->second;
+        }
+        if (radioItUpDown != controlMap.radioButtonMap.end()) {
+            upDownRadio = radioItUpDown->second;
+        }
+        // 判断哪个被选中
+        if (leftRightRadio && leftRightRadio->isChecked()) {
+            buckleDirection = true; // 左右方向
+        } else if (upDownRadio && upDownRadio->isChecked()) {
+            buckleDirection = false; // 上下方向
+        } else {
+            // 可选：两个都没选中，可以设置默认值，或者打印警告
+            // My_LOG(QLOG_WARN, QString("未选择扣合方向（buckle_left_right 或 buckle_up_down）"));
+        }
+        jsonObject["buckle_direction"] = buckleDirection;
 
         // 构造符合信号要求的参数
         std::map<QString, QJsonObject> paramMap;         // 用于信号传递
@@ -98,6 +119,40 @@ void AlgorithmParameterView::slots_AlgorithmParameterView_Receive_AlgorithmParam
                 // My_LOG(QLOG_WARN, QString("未找到控件: 参数 '%1' 对应的 SpinBox").arg(paramName));
             }
         }
+
+        auto radioIt = paramJson.find("buckle_direction");
+        if (radioIt != paramJson.end() && radioIt->isBool()) {
+            bool buckleDirection = radioIt->toBool(); // true or false
+
+            QRadioButton *leftRightRadio = nullptr;
+            QRadioButton *upDownRadio = nullptr;
+
+            // 查找这两个 RadioButton 控件
+            auto leftRightIt = controlMap.radioButtonMap.find("buckle_left_right");
+            auto upDownIt = controlMap.radioButtonMap.find("buckle_up_down");
+
+            if (leftRightIt != controlMap.radioButtonMap.end()) {
+                leftRightRadio = leftRightIt->second;
+            }
+            if (upDownIt != controlMap.radioButtonMap.end()) {
+                upDownRadio = upDownIt->second;
+            }
+
+            // 根据 buckle_direction 值设置对应单选按钮
+            if (buckleDirection) {
+                // 选中 "左右方向"
+                if (leftRightRadio)
+                    leftRightRadio->setChecked(true);
+                if (upDownRadio)
+                    upDownRadio->setChecked(false);
+            } else {
+                // 选中 "上下方向"
+                if (leftRightRadio)
+                    leftRightRadio->setChecked(false);
+                if (upDownRadio)
+                    upDownRadio->setChecked(true);
+            }
+        }
     }
 }
 
@@ -123,8 +178,8 @@ void AlgorithmParameterView::controlInit()
 
     this->ui->comboBox_BIBBoradType->addItem("BGA63");
     this->ui->comboBox_BIBBoradType->addItem("BGA154");
-    this->ui->comboBox_BIBBoradType->addItem("WSON8");
     this->ui->comboBox_BIBBoradType->addItem("SOIC16");
+    this->ui->comboBox_BIBBoradType->addItem("WSON8");
 
     this->QSpinBoxInit();  // QSpinBox 初始化
     this->BoardTypeInit(); // 映射表初始化
@@ -141,6 +196,18 @@ void AlgorithmParameterView::controlInit()
 
     this->m_BIBBoradTypeName = "BGA63";
     this->m_BIBBoradTypeIndex = 0;
+    
+    // 芯片二值化阈值
+    this->ui->spinBox_BGA63_chip_binary_low->setRange(0, 255);
+    this->ui->spinBox_BGA63_chip_binary_low->setSingleStep(1);
+    this->ui->spinBox_BGA63_chip_binary_high->setRange(0, 255);
+    this->ui->spinBox_BGA63_chip_binary_high->setSingleStep(1);
+    // 卡扣二值化阈值
+    this->ui->spinBox_BGA63_buckle_binary_low->setRange(0, 255);
+    this->ui->spinBox_BGA63_buckle_binary_low->setSingleStep(1);
+    this->ui->spinBox_BGA63_buckle_binary_high->setRange(0, 255);
+    this->ui->spinBox_BGA63_buckle_binary_high->setSingleStep(1);
+    ................
 }
 
 void AlgorithmParameterView::QSpinBoxInit()
@@ -179,12 +246,14 @@ void AlgorithmParameterView::BoardTypeInit()
     bga63Map.spinBoxMap["chip_half_height"] = this->ui->spinBox_BGA63_chip_half_height;
     bga63Map.spinBoxMap["chip_exist_low"] = this->ui->spinBox_BGA63_chip_exist_low;
     bga63Map.spinBoxMap["chip_exist_high"] = this->ui->spinBox_BGA63_chip_exist_high;
-    this->ui->radioButton_BGA63_buckle_left_right;
-    this->ui->radioButton_BGA63_buckle_up_down;
     bga63Map.spinBoxMap["buckle_half_width"] = this->ui->spinBox_BGA63_buckle_half_width;
     bga63Map.spinBoxMap["buckle_half_height"] = this->ui->spinBox_BGA63_buckle_half_height;
     bga63Map.spinBoxMap["buckle_binary_low"] = this->ui->spinBox_BGA63_buckle_binary_low;
     bga63Map.spinBoxMap["buckle_binary_high"] = this->ui->spinBox_BGA63_buckle_binary_high;
+    bga63Map.spinBoxMap["buckle_edging_binary_low"] = this->ui
+                                                          ->spinBox_BGA63_buckle_edging_binary_low;
+    bga63Map.spinBoxMap["buckle_edging_binary_high"]
+        = this->ui->spinBox_BGA63_buckle_edging_binary_high;
     bga63Map.spinBoxMap["buckle_width_low"] = this->ui->spinBox_BGA63_buckle_width_low;
     bga63Map.spinBoxMap["buckle_width_high"] = this->ui->spinBox_BGA63_buckle_width_high;
     bga63Map.spinBoxMap["buckle_height_low"] = this->ui->spinBox_BGA63_buckle_height_low;
@@ -193,6 +262,8 @@ void AlgorithmParameterView::BoardTypeInit()
     bga63Map.spinBoxMap["buckle_left_high"] = this->ui->spinBox_BGA63_buckle_left_high;
     bga63Map.spinBoxMap["buckle_right_low"] = this->ui->spinBox_BGA63_buckle_right_low;
     bga63Map.spinBoxMap["buckle_right_high"] = this->ui->spinBox_BGA63_buckle_right_high;
+    bga63Map.radioButtonMap["buckle_left_right"] = this->ui->radioButton_BGA63_buckle_left_right;
+    bga63Map.radioButtonMap["buckle_up_down"] = this->ui->radioButton_BGA63_buckle_up_down;
 
     // ==================== BGA154 ====================
     BoardControlMap bga154Map;
@@ -208,6 +279,10 @@ void AlgorithmParameterView::BoardTypeInit()
     bga154Map.spinBoxMap["buckle_half_height"] = this->ui->spinBox_BGA154_buckle_half_height;
     bga154Map.spinBoxMap["buckle_binary_low"] = this->ui->spinBox_BGA154_buckle_binary_low;
     bga154Map.spinBoxMap["buckle_binary_high"] = this->ui->spinBox_BGA154_buckle_binary_high;
+    bga154Map.spinBoxMap["buckle_edging_binary_low"]
+        = this->ui->spinBox_BGA154_buckle_edging_binary_low;
+    bga154Map.spinBoxMap["buckle_edging_binary_high"]
+        = this->ui->spinBox_BGA154_buckle_edging_binary_high;
     bga154Map.spinBoxMap["buckle_width_low"] = this->ui->spinBox_BGA154_buckle_width_low;
     bga154Map.spinBoxMap["buckle_width_high"] = this->ui->spinBox_BGA154_buckle_width_high;
     bga154Map.spinBoxMap["buckle_height_low"] = this->ui->spinBox_BGA154_buckle_height_low;
@@ -216,6 +291,8 @@ void AlgorithmParameterView::BoardTypeInit()
     bga154Map.spinBoxMap["buckle_left_high"] = this->ui->spinBox_BGA154_buckle_left_high;
     bga154Map.spinBoxMap["buckle_right_low"] = this->ui->spinBox_BGA154_buckle_right_low;
     bga154Map.spinBoxMap["buckle_right_high"] = this->ui->spinBox_BGA154_buckle_right_high;
+    bga154Map.radioButtonMap["buckle_left_right"] = this->ui->radioButton_BGA154_buckle_left_right;
+    bga154Map.radioButtonMap["buckle_up_down"] = this->ui->radioButton_BGA154_buckle_up_down;
 
     // ==================== WSON8 ====================
     BoardControlMap wson8Map;
@@ -231,6 +308,10 @@ void AlgorithmParameterView::BoardTypeInit()
     wson8Map.spinBoxMap["buckle_half_height"] = this->ui->spinBox_WSON8_buckle_half_height;
     wson8Map.spinBoxMap["buckle_binary_low"] = this->ui->spinBox_WSON8_buckle_binary_low;
     wson8Map.spinBoxMap["buckle_binary_high"] = this->ui->spinBox_WSON8_buckle_binary_high;
+    wson8Map.spinBoxMap["buckle_edging_binary_low"] = this->ui
+                                                          ->spinBox_WSON8_buckle_edging_binary_low;
+    wson8Map.spinBoxMap["buckle_edging_binary_high"]
+        = this->ui->spinBox_WSON8_buckle_edging_binary_high;
     wson8Map.spinBoxMap["buckle_width_low"] = this->ui->spinBox_WSON8_buckle_width_low;
     wson8Map.spinBoxMap["buckle_width_high"] = this->ui->spinBox_WSON8_buckle_width_high;
     wson8Map.spinBoxMap["buckle_height_low"] = this->ui->spinBox_WSON8_buckle_height_low;
@@ -239,6 +320,8 @@ void AlgorithmParameterView::BoardTypeInit()
     wson8Map.spinBoxMap["buckle_left_high"] = this->ui->spinBox_WSON8_buckle_left_high;
     wson8Map.spinBoxMap["buckle_right_low"] = this->ui->spinBox_WSON8_buckle_right_low;
     wson8Map.spinBoxMap["buckle_right_high"] = this->ui->spinBox_WSON8_buckle_right_high;
+    wson8Map.radioButtonMap["buckle_left_right"] = this->ui->radioButton_WSON8_buckle_left_right;
+    wson8Map.radioButtonMap["buckle_up_down"] = this->ui->radioButton_WSON8_buckle_up_down;
 
     // ==================== SOIC16 ====================
     BoardControlMap soic16Map;
@@ -254,6 +337,10 @@ void AlgorithmParameterView::BoardTypeInit()
     soic16Map.spinBoxMap["buckle_half_height"] = this->ui->spinBox_SOIC16_buckle_half_height;
     soic16Map.spinBoxMap["buckle_binary_low"] = this->ui->spinBox_SOIC16_buckle_binary_low;
     soic16Map.spinBoxMap["buckle_binary_high"] = this->ui->spinBox_SOIC16_buckle_binary_high;
+    soic16Map.spinBoxMap["buckle_edging_binary_low"]
+        = this->ui->spinBox_SOIC16_buckle_edging_binary_low;
+    soic16Map.spinBoxMap["buckle_edging_binary_high"]
+        = this->ui->spinBox_SOIC16_buckle_edging_binary_high;
     soic16Map.spinBoxMap["buckle_width_low"] = this->ui->spinBox_SOIC16_buckle_width_low;
     soic16Map.spinBoxMap["buckle_width_high"] = this->ui->spinBox_SOIC16_buckle_width_high;
     soic16Map.spinBoxMap["buckle_height_low"] = this->ui->spinBox_SOIC16_buckle_height_low;
@@ -262,6 +349,8 @@ void AlgorithmParameterView::BoardTypeInit()
     soic16Map.spinBoxMap["buckle_left_high"] = this->ui->spinBox_SOIC16_buckle_left_high;
     soic16Map.spinBoxMap["buckle_right_low"] = this->ui->spinBox_SOIC16_buckle_right_low;
     soic16Map.spinBoxMap["buckle_right_high"] = this->ui->spinBox_SOIC16_buckle_right_high;
+    soic16Map.radioButtonMap["buckle_left_right"] = this->ui->radioButton_SOIC16_buckle_left_right;
+    soic16Map.radioButtonMap["buckle_up_down"] = this->ui->radioButton_SOIC16_buckle_up_down;
 
     // ==================== 存入全局映射表 ====================
     boardTypeToControls["BGA63"] = bga63Map;
