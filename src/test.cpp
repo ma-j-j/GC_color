@@ -1,481 +1,62 @@
-#include "AlgorithmParameterView.h"
-#include "ui_AlgorithmParameterView.h"
-
-AlgorithmParameterView::AlgorithmParameterView(QWidget *parent)
-    : QWidget(parent)
-    , ui(new Ui::AlgorithmParameterView)
+void Save_JsonFile::SaveAlgorithmParameterJsonFile(const QJsonObject &jsonObj,
+                                                   const QString &type_name)
 {
-    ui->setupUi(this);
+    QString file_name = "AlgorithmParameter_" + type_name + ".json";
 
-    // 控件初始化
-    this->controlInit();
-    // 控件样式初始化
-    this->controlStyleInit();
-}
-
-AlgorithmParameterView::~AlgorithmParameterView()
-{
-    delete ui;
-}
-
-void AlgorithmParameterView::slots_AlgorithmParameterView_On_PushButton_SaveParame_Clecked()
-{
     try {
-        // 根据当前板型名称查找对应的控件映射表
-        auto it = boardTypeToControls.find(this->m_BIBBoradTypeName);
-        if (it == boardTypeToControls.end()) {
-            // My_LOG(QLOG_ERROR, QString("未找到板型 '%1' 的控件映射").arg(m_BIBBoradTypeName));
-            return;
+        QString save_path = "../../JsonFiles/AlgorithmParameter/" + file_name;
+
+        // 将QJsonObject转换为QJsonDocument
+        QJsonDocument doc(jsonObj);
+
+        // 写入文件
+        QFile file(save_path);
+        if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            qWarning() << "Could not open Algorithm file for writing:";
         }
 
-        const BoardControlMap &controlMap = it->second;
-        QJsonObject jsonObject;
-
-        // 遍历该板型的所有参数名 -> 控件指针 映射
-        for (const auto &paramPair : controlMap.spinBoxMap) {
-            const QString &paramName = paramPair.first; // 如 "chip_binary_low"
-            QSpinBox *spinBox = paramPair.second;       // 对应的 QSpinBox*
-            if (spinBox) {
-                jsonObject[paramName] = spinBox->value(); // 读取值并存入 JSON
-            } else {
-                // My_LOG(QLOG_WARN, QString("控件指针为空: 参数 '%1' 对应的 SpinBox").arg(paramName));
-            }
-        }
-        // 保存卡扣方向
-        bool buckleDirection = false; // 默认是上下方向
-        auto radioItLeftRight = controlMap.radioButtonMap.find("buckle_left_right");
-        auto radioItUpDown = controlMap.radioButtonMap.find("buckle_up_down");
-        QRadioButton *leftRightRadio = nullptr;
-        QRadioButton *upDownRadio = nullptr;
-        if (radioItLeftRight != controlMap.radioButtonMap.end()) {
-            leftRightRadio = radioItLeftRight->second;
-        }
-        if (radioItUpDown != controlMap.radioButtonMap.end()) {
-            upDownRadio = radioItUpDown->second;
-        }
-        // 判断哪个被选中
-        if (leftRightRadio && leftRightRadio->isChecked()) {
-            buckleDirection = true; // 左右方向
-        } else if (upDownRadio && upDownRadio->isChecked()) {
-            buckleDirection = false; // 上下方向
-        } else {
-            // 可选：两个都没选中，可以设置默认值，或者打印警告
-            // My_LOG(QLOG_WARN, QString("未选择扣合方向（buckle_left_right 或 buckle_up_down）"));
-        }
-        jsonObject["buckle_direction"] = buckleDirection;
-
-        // 构造符合信号要求的参数
-        std::map<QString, QJsonObject> paramMap;         // 用于信号传递
-        paramMap[this->m_BIBBoradTypeName] = jsonObject; // 当前板型名 -> 对应 JSON
-
-        QString boardTypeName = this->m_BIBBoradTypeName; // 当前板型名称
-
-        // 发射信号，传递 map 和 板型名称
-        emit this->signals_AlgorithmParameterView_Sent_SaveParamJson(paramMap, boardTypeName);
-
+        file.write(doc.toJson(QJsonDocument::Indented)); // 使用缩进格式美化JSON
+        file.close();
+        std::string info = file_name.toStdString() + "保存成功";
+        My_LOG(QLog4cplus::Level::l_INFO, info.c_str());
+        QMessageBox::information(nullptr, "提示", "算法参数保存成功！");
     } catch (const std::exception &e) {
-        // My_LOG(QLOG_ERROR, QString("AlgorithmParameterView::slots_AlgorithmParameterView_On_PushButton_SaveParame_Clecked 异常: %1").arg(e.what()));
-    } catch (...) {
-        My_LOG(QLOG_ERROR,
-               u8"AlgorithmParameterView::slots_AlgorithmParameterView_On_PushButton_SaveParame_"
-               u8"Clecked 未知异常");
+        std::string error = file_name.toStdString() + "保存失败";
+        My_LOG(QLog4cplus::Level::l_ERROR, error.c_str());
+        QMessageBox::information(nullptr, "提示", QString::fromStdString(error));
     }
 }
 
-// 接收后端算法参数到前端页面进行显示
-void AlgorithmParameterView::slots_AlgorithmParameterView_Receive_AlgorithmParameterModel(
+
+void MainWindowModel::slots_MainWindowModel_Receive_AlgorithmParameter_UpDate(
     std::map<QString, QJsonObject> algorithmParams, QString type_name)
 {
-    for (const auto &boardPair : algorithmParams) {
-        const QString &boardType = boardPair.first;      // 如 "BGA63"
-        const QJsonObject &paramJson = boardPair.second; // 如 {"chip_binary_low":10, ...}
+    // 同步修改的算法参数
+    m_Algorithm_Parameter_Map = algorithmParams;
 
-        // 查找该板型是否在映射表中
-        auto it = boardTypeToControls.find(boardType);
-        if (it == boardTypeToControls.end()) {
-            // My_LOG(QLOG_WARN, QString("未找到板型 '%1' 的控件映射").arg(boardType));
-            continue;
-        }
+    // 在映射表中查找对应的 AlgorithmParamete 数据
+    auto algorithmparams = m_Algorithm_Parameter_Map.find(type_name); // 查找键为 type_name 的条目
 
-        BoardControlMap &controlMap = it->second;
-
-        // 遍历该板型的所有参数，并尝试设置到对应的 spinBox 上
-        for (auto jsonIt = paramJson.begin(); jsonIt != paramJson.end(); ++jsonIt) {
-            const QString &paramName = jsonIt.key(); // 如 "chip_binary_low"
-            QJsonValue value = jsonIt.value();
-
-            if (!value.isDouble()) {
-                // My_LOG(QLOG_WARN, QString("参数 '%1' 不是数字类型").arg(paramName));
-                // qDebug() << "参数:" << paramName << "错误";
-                continue;
-            }
-
-            int intValue = value.toInt(); // QSpinBox 需要 int
-
-            // 查找该参数名对应的控件
-            auto spinBoxIt = controlMap.spinBoxMap.find(paramName);
-            if (spinBoxIt != controlMap.spinBoxMap.end() && spinBoxIt->second) {
-                spinBoxIt->second->setValue(intValue); // 设置值
-            } else {
-                // My_LOG(QLOG_WARN, QString("未找到控件: 参数 '%1' 对应的 SpinBox").arg(paramName));
-                qDebug() << "参数:" << paramName << "未找到";
-            }
-        }
-
-        auto radioIt = paramJson.find("buckle_direction");
-        if (radioIt != paramJson.end() && radioIt->isBool()) {
-            bool buckleDirection = radioIt->toBool(); // true or false
-
-            QRadioButton *leftRightRadio = nullptr;
-            QRadioButton *upDownRadio = nullptr;
-
-            // 查找这两个 RadioButton 控件
-            auto leftRightIt = controlMap.radioButtonMap.find("buckle_left_right");
-            auto upDownIt = controlMap.radioButtonMap.find("buckle_up_down");
-
-            if (leftRightIt != controlMap.radioButtonMap.end()) {
-                leftRightRadio = leftRightIt->second;
-            }
-            if (upDownIt != controlMap.radioButtonMap.end()) {
-                upDownRadio = upDownIt->second;
-            }
-
-            // 根据 buckle_direction 值设置对应单选按钮
-            if (buckleDirection) {
-                // 选中 "左右方向"
-                if (leftRightRadio)
-                    leftRightRadio->setChecked(true);
-                if (upDownRadio)
-                    upDownRadio->setChecked(false);
-            } else {
-                // 选中 "上下方向"
-                if (leftRightRadio)
-                    leftRightRadio->setChecked(false);
-                if (upDownRadio)
-                    upDownRadio->setChecked(true);
-            }
-        }
+    if (algorithmparams != m_Algorithm_Parameter_Map.end()) {
+        m_Algorithm_Parameter_QJsonObj
+            = algorithmparams->second; // algorithmparams->second 是对应的 std::vector<cv::Rect>
+        this->QJsonObject_Algorithm(m_Algorithm_Parameter_QJsonObj, m_Algorithm_Parameter);
     }
-}
-
-void AlgorithmParameterView::slots_AlgorithmParameterView_Receive_BIBBoard_TypeChanged(int type_index)
-{ // 通过索引获取当前选中的文本
-    QString selectedText = this->ui->comboBox_BIBBoradType->itemText(type_index);
-    this->m_BIBBoradTypeIndex = type_index;
-    this->m_BIBBoradTypeName = selectedText;
-    if (selectedText == "BGA63") {
-        this->ui->stackedWidget->setCurrentWidget(this->ui->page1_BGA63);
-    } else if (selectedText == "BGA154") {
-        this->ui->stackedWidget->setCurrentWidget(this->ui->page2_BGA154);
-    } else if (selectedText == "WSON8") {
-        this->ui->stackedWidget->setCurrentWidget(this->ui->page3_WSON8);
-    } else if (selectedText == "SOIC16") {
-        this->ui->stackedWidget->setCurrentWidget(this->ui->page4_SOIC16);
-    }
-}
-
-void AlgorithmParameterView::controlInit()
-{
-    this->ui->stackedWidget->setCurrentWidget(this->ui->page1_BGA63);
-
-    this->ui->comboBox_BIBBoradType->addItem("BGA63");
-    this->ui->comboBox_BIBBoradType->addItem("BGA154");
-    this->ui->comboBox_BIBBoradType->addItem("SOIC16");
-    this->ui->comboBox_BIBBoradType->addItem("WSON8");
-
-    this->BoardTypeInit(); // 映射表初始化
-    this->QSpinBoxInit();  // QSpinBox 初始化
-
-    connect(this->ui->pushButton_SaveAlgorithmParameter,
-            &QPushButton::clicked,
-            this,
-            &AlgorithmParameterView::slots_AlgorithmParameterView_On_PushButton_SaveParame_Clecked);
-    // 接收BIB板的型号
-    connect(this->ui->comboBox_BIBBoradType,
-            static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
-            this,
-            &AlgorithmParameterView::slots_AlgorithmParameterView_Receive_BIBBoard_TypeChanged);
-
-    this->m_BIBBoradTypeName = "BGA63";
-    this->m_BIBBoradTypeIndex = 0;
-}
-
-void AlgorithmParameterView::BoardTypeInit()
-{
-    // ==================== BGA63 ====================
-    BoardControlMap bga63Map;
-    bga63Map.page = this->ui->page1_BGA63;
-
-    bga63Map.spinBoxMap["chip_binary_low"] = this->ui->spinBox_BGA63_chip_binary_low;
-    bga63Map.spinBoxMap["chip_binary_high"] = this->ui->spinBox_BGA63_chip_binary_high;
-    bga63Map.spinBoxMap["chip_half_width"] = this->ui->spinBox_BGA63_chip_half_width;
-    bga63Map.spinBoxMap["chip_half_height"] = this->ui->spinBox_BGA63_chip_half_height;
-    bga63Map.spinBoxMap["chip_exist_low"] = this->ui->spinBox_BGA63_chip_exist_low;
-    bga63Map.spinBoxMap["chip_exist_high"] = this->ui->spinBox_BGA63_chip_exist_high;
-    bga63Map.spinBoxMap["buckle_half_width"] = this->ui->spinBox_BGA63_buckle_half_width;
-    bga63Map.spinBoxMap["buckle_half_height"] = this->ui->spinBox_BGA63_buckle_half_height;
-    bga63Map.spinBoxMap["buckle_binary_low"] = this->ui->spinBox_BGA63_buckle_binary_low;
-    bga63Map.spinBoxMap["buckle_binary_high"] = this->ui->spinBox_BGA63_buckle_binary_high;
-    bga63Map.spinBoxMap["buckle_edging_binary_low"] = this->ui
-                                                          ->spinBox_BGA63_buckle_edging_binary_low;
-    bga63Map.spinBoxMap["buckle_edging_binary_high"]
-        = this->ui->spinBox_BGA63_buckle_edging_binary_high;
-    bga63Map.spinBoxMap["buckle_width_low"] = this->ui->spinBox_BGA63_buckle_width_low;
-    bga63Map.spinBoxMap["buckle_width_high"] = this->ui->spinBox_BGA63_buckle_width_high;
-    bga63Map.spinBoxMap["buckle_height_low"] = this->ui->spinBox_BGA63_buckle_height_low;
-    bga63Map.spinBoxMap["buckle_height_high"] = this->ui->spinBox_BGA63_buckle_height_high;
-    bga63Map.spinBoxMap["buckle_edging_width_low"] = this->ui->spinBox_BGA63_buckle_edging_width_low;
-    bga63Map.spinBoxMap["buckle_edging_width_high"] = this->ui
-                                                          ->spinBox_BGA63_buckle_edging_width_high;
-    bga63Map.spinBoxMap["buckle_edging_height_low"] = this->ui
-                                                          ->spinBox_BGA63_buckle_edging_height_low;
-    bga63Map.spinBoxMap["buckle_edging_height_high"]
-        = this->ui->spinBox_BGA63_buckle_edging_height_high;
-    bga63Map.radioButtonMap["buckle_left_right"] = this->ui->radioButton_BGA63_buckle_left_right;
-    bga63Map.radioButtonMap["buckle_up_down"] = this->ui->radioButton_BGA63_buckle_up_down;
-
-    // ==================== BGA154 ====================
-    BoardControlMap bga154Map;
-    bga154Map.page = this->ui->page2_BGA154;
-
-    bga154Map.spinBoxMap["chip_binary_low"] = this->ui->spinBox_BGA154_chip_binary_low;
-    bga154Map.spinBoxMap["chip_binary_high"] = this->ui->spinBox_BGA154_chip_binary_high;
-    bga154Map.spinBoxMap["chip_half_width"] = this->ui->spinBox_BGA154_chip_half_width;
-    bga154Map.spinBoxMap["chip_half_height"] = this->ui->spinBox_BGA154_chip_half_height;
-    bga154Map.spinBoxMap["chip_exist_low"] = this->ui->spinBox_BGA154_chip_exist_low;
-    bga154Map.spinBoxMap["chip_exist_high"] = this->ui->spinBox_BGA154_chip_exist_high;
-    bga154Map.spinBoxMap["buckle_half_width"] = this->ui->spinBox_BGA154_buckle_half_width;
-    bga154Map.spinBoxMap["buckle_half_height"] = this->ui->spinBox_BGA154_buckle_half_height;
-    bga154Map.spinBoxMap["buckle_binary_low"] = this->ui->spinBox_BGA154_buckle_binary_low;
-    bga154Map.spinBoxMap["buckle_binary_high"] = this->ui->spinBox_BGA154_buckle_binary_high;
-    bga154Map.spinBoxMap["buckle_edging_binary_low"]
-        = this->ui->spinBox_BGA154_buckle_edging_binary_low;
-    bga154Map.spinBoxMap["buckle_edging_binary_high"]
-        = this->ui->spinBox_BGA154_buckle_edging_binary_high;
-    bga154Map.spinBoxMap["buckle_width_low"] = this->ui->spinBox_BGA154_buckle_width_low;
-    bga154Map.spinBoxMap["buckle_width_high"] = this->ui->spinBox_BGA154_buckle_width_high;
-    bga154Map.spinBoxMap["buckle_height_low"] = this->ui->spinBox_BGA154_buckle_height_low;
-    bga154Map.spinBoxMap["buckle_height_high"] = this->ui->spinBox_BGA154_buckle_height_high;
-    bga154Map.spinBoxMap["buckle_edging_width_low"] = this->ui
-                                                          ->spinBox_BGA154_buckle_edging_width_low;
-    bga154Map.spinBoxMap["buckle_edging_width_high"]
-        = this->ui->spinBox_BGA154_buckle_edging_width_high;
-    bga154Map.spinBoxMap["buckle_edging_height_low"]
-        = this->ui->spinBox_BGA154_buckle_edging_height_low;
-    bga154Map.spinBoxMap["buckle_edging_height_high"]
-        = this->ui->spinBox_BGA154_buckle_edging_height_high;
-    bga154Map.radioButtonMap["buckle_left_right"] = this->ui->radioButton_BGA154_buckle_left_right;
-    bga154Map.radioButtonMap["buckle_up_down"] = this->ui->radioButton_BGA154_buckle_up_down;
-
-    // ==================== WSON8 ====================
-    BoardControlMap wson8Map;
-    wson8Map.page = this->ui->page3_WSON8;
-
-    wson8Map.spinBoxMap["chip_binary_low"] = this->ui->spinBox_WSON8_chip_binary_low;
-    wson8Map.spinBoxMap["chip_binary_high"] = this->ui->spinBox_WSON8_chip_binary_high;
-    wson8Map.spinBoxMap["chip_half_width"] = this->ui->spinBox_WSON8_chip_half_width;
-    wson8Map.spinBoxMap["chip_half_height"] = this->ui->spinBox_WSON8_chip_half_height;
-    wson8Map.spinBoxMap["chip_exist_low"] = this->ui->spinBox_WSON8_chip_exist_low;
-    wson8Map.spinBoxMap["chip_exist_high"] = this->ui->spinBox_WSON8_chip_exist_high;
-    wson8Map.spinBoxMap["buckle_half_width"] = this->ui->spinBox_WSON8_buckle_half_width;
-    wson8Map.spinBoxMap["buckle_half_height"] = this->ui->spinBox_WSON8_buckle_half_height;
-    wson8Map.spinBoxMap["buckle_binary_low"] = this->ui->spinBox_WSON8_buckle_binary_low;
-    wson8Map.spinBoxMap["buckle_binary_high"] = this->ui->spinBox_WSON8_buckle_binary_high;
-    wson8Map.spinBoxMap["buckle_edging_binary_low"] = this->ui
-                                                          ->spinBox_WSON8_buckle_edging_binary_low;
-    wson8Map.spinBoxMap["buckle_edging_binary_high"]
-        = this->ui->spinBox_WSON8_buckle_edging_binary_high;
-    wson8Map.spinBoxMap["buckle_width_low"] = this->ui->spinBox_WSON8_buckle_width_low;
-    wson8Map.spinBoxMap["buckle_width_high"] = this->ui->spinBox_WSON8_buckle_width_high;
-    wson8Map.spinBoxMap["buckle_height_low"] = this->ui->spinBox_WSON8_buckle_height_low;
-    wson8Map.spinBoxMap["buckle_height_high"] = this->ui->spinBox_WSON8_buckle_height_high;
-    wson8Map.spinBoxMap["buckle_edging_width_low"] = this->ui->spinBox_WSON8_buckle_edging_width_low;
-    wson8Map.spinBoxMap["buckle_edging_width_high"] = this->ui
-                                                          ->spinBox_WSON8_buckle_edging_width_high;
-    wson8Map.spinBoxMap["buckle_edging_height_low"] = this->ui
-                                                          ->spinBox_WSON8_buckle_edging_height_low;
-    wson8Map.spinBoxMap["buckle_edging_height_high"]
-        = this->ui->spinBox_WSON8_buckle_edging_height_high;
-    wson8Map.radioButtonMap["buckle_left_right"] = this->ui->radioButton_WSON8_buckle_left_right;
-    wson8Map.radioButtonMap["buckle_up_down"] = this->ui->radioButton_WSON8_buckle_up_down;
-
-    // ==================== SOIC16 ====================
-    BoardControlMap soic16Map;
-    soic16Map.page = this->ui->page4_SOIC16;
-
-    soic16Map.spinBoxMap["chip_binary_low"] = this->ui->spinBox_SOIC16_chip_binary_low;
-    soic16Map.spinBoxMap["chip_binary_high"] = this->ui->spinBox_SOIC16_chip_binary_high;
-    soic16Map.spinBoxMap["chip_half_width"] = this->ui->spinBox_SOIC16_chip_half_width;
-    soic16Map.spinBoxMap["chip_half_height"] = this->ui->spinBox_SOIC16_chip_half_height;
-    soic16Map.spinBoxMap["chip_exist_low"] = this->ui->spinBox_SOIC16_chip_exist_low;
-    soic16Map.spinBoxMap["chip_exist_high"] = this->ui->spinBox_SOIC16_chip_exist_high;
-    soic16Map.spinBoxMap["buckle_half_width"] = this->ui->spinBox_SOIC16_buckle_half_width;
-    soic16Map.spinBoxMap["buckle_half_height"] = this->ui->spinBox_SOIC16_buckle_half_height;
-    soic16Map.spinBoxMap["buckle_binary_low"] = this->ui->spinBox_SOIC16_buckle_binary_low;
-    soic16Map.spinBoxMap["buckle_binary_high"] = this->ui->spinBox_SOIC16_buckle_binary_high;
-    soic16Map.spinBoxMap["buckle_edging_binary_low"]
-        = this->ui->spinBox_SOIC16_buckle_edging_binary_low;
-    soic16Map.spinBoxMap["buckle_edging_binary_high"]
-        = this->ui->spinBox_SOIC16_buckle_edging_binary_high;
-    soic16Map.spinBoxMap["buckle_width_low"] = this->ui->spinBox_SOIC16_buckle_width_low;
-    soic16Map.spinBoxMap["buckle_width_high"] = this->ui->spinBox_SOIC16_buckle_width_high;
-    soic16Map.spinBoxMap["buckle_height_low"] = this->ui->spinBox_SOIC16_buckle_height_low;
-    soic16Map.spinBoxMap["buckle_height_high"] = this->ui->spinBox_SOIC16_buckle_height_high;
-    soic16Map.spinBoxMap["buckle_edging_width_low"] = this->ui
-                                                          ->spinBox_SOIC16_buckle_edging_width_low;
-    soic16Map.spinBoxMap["buckle_edging_width_high"]
-        = this->ui->spinBox_SOIC16_buckle_edging_width_high;
-    soic16Map.spinBoxMap["buckle_edging_height_low"]
-        = this->ui->spinBox_SOIC16_buckle_edging_height_low;
-    soic16Map.spinBoxMap["buckle_edging_height_high"]
-        = this->ui->spinBox_SOIC16_buckle_edging_height_high;
-    soic16Map.radioButtonMap["buckle_left_right"] = this->ui->radioButton_SOIC16_buckle_left_right;
-    soic16Map.radioButtonMap["buckle_up_down"] = this->ui->radioButton_SOIC16_buckle_up_down;
-
-    // ==================== 存入全局映射表 ====================
-    boardTypeToControls["BGA63"] = bga63Map;
-    boardTypeToControls["BGA154"] = bga154Map;
-    boardTypeToControls["WSON8"] = wson8Map;
-    boardTypeToControls["SOIC16"] = soic16Map;
-}
-
-void AlgorithmParameterView::QSpinBoxInit()
-{
-    // 遍历所有板型及其 spinBox 控件
-    for (auto &boardPair : boardTypeToControls) {
-        const BoardControlMap &controlMap = boardPair.second;
-
-        for (auto &spinBoxPair : controlMap.spinBoxMap) {
-            QSpinBox *spinBox = spinBoxPair.second;
-            if (!spinBox)
-                continue;
-
-            QString name = spinBox->objectName();
-
-            // 二值化控件初始化
-            if (name.contains("chip_binary_low") || name.contains("chip_binary_high")
-                || name.contains("buckle_binary_low") || name.contains("buckle_binary_high")
-                || name.contains("buckle_edging_binary_low")
-                || name.contains("buckle_edging_binary_high")) {
-                // 二值化类参数，范围 [0, 255]
-                spinBox->setRange(0, 255);
-                spinBox->setSingleStep(1);
-            }
-            // 长宽控件初始化
-            else if (name.contains("chip_half_width") || name.contains("chip_half_height")
-                     || name.contains("buckle_half_width") || name.contains("buckle_half_height")
-                     || name.contains("buckle_width_low") || name.contains("buckle_width_high")
-                     || name.contains("buckle_height_low") || name.contains("buckle_height_high")
-                     || name.contains("buckle_edging_width_low")
-                     || name.contains("buckle_edging_width_high")
-                     || name.contains("buckle_edging_height_low")
-                     || name.contains("buckle_edging_height_high")
-                     || name.contains("buckle_left_right") || name.contains("buckle_up_down")) {
-                // 尺寸类参数，范围 [0, 1000]
-                spinBox->setRange(0, 1000);
-                spinBox->setSingleStep(1);
-            }
-            // 芯片存在
-            else if (name.contains("chip_exist_low") || name.contains("chip_exist_high")) {
-                spinBox->setRange(0, 800000);
-                spinBox->setSingleStep(1);
-            }
-        }
-    }
-}
-
-void AlgorithmParameterView::controlStyleInit()
-{
-    // QPushButton样式表设置
-    QString buttonStyle = (R"(
-        QPushButton {
-            font-family: 'Microsoft YaHei';
-            border: 2px solid #696969; /* #92bd6c; */
-            color: black;
-            padding: 2px 3px;
-            font-size: 16px;
-            border-radius: 4px;
-        }
-        QPushButton:hover {
-            background-color: #E0E0E0; /* 浅灰 */
-            color: black;
-        }
-        QPushButton:pressed {
-            background-color: #696969; /* 点击时背景颜色为黑色 */
-        }
-    )");
-
-    // QGroupBox样式表设置
-    QString groupBoxStyle = (R"(
-        QGroupBox {
-            border: 2px solid #888;         /* 边框粗细和颜色 */
-            border-radius: 3px;             /* 边框圆角半径 */
-            margin-top: 6px;
-        }
-        QGroupBox::title {
-            color: #000000;                 /* 标题文字颜色 */
-            font-size: 14px;                /* 字体大小 */
-            subcontrol-origin: margin;      /* 标题定位基准（margin/padding/content） */
-            subcontrol-position: top left;  /* 标题位置 */
-            padding: 0 3px;                 /* 标题内边距 */
-            left: 10px;                     /* 水平偏移（相对 subcontrol-origin） */
-        }
-    )");
-    // QComboBox样式表设置
-    QString comboBoxStyle(R"(
-        QComboBox {                         /* 基础样式 */
-            font-family: 'Microsoft YaHei';
-            background-color: #EFEEEE;      /* 背景色 */
-            color: #000000;                 /* 文字颜色 */
-            font-size: 15px;                /* 字号 */
-            border: 1px solid #696969;      /* 边框 */
-            border-radius: 4px;             /* 圆角 */
-            padding: 1px;                   /* 内边距 */
-        }
-        QComboBox::drop-down {              /* 下拉按钮左侧 */
-            subcontrol-origin: padding;     /* 定位基准 */
-            subcontrol-position: right;     /* 位置 */
-            width: 20px;                    /* 按钮宽度 */
-            border-left: 1px solid #CCC;    /* 左侧分隔线 */
-        }
-        QComboBox::down-arrow {             /* 下拉按钮右侧 */
-            width: 16px;
-            height: 16px;
-            image: url(:/Image/OtherConfigViewResources/下拉箭头.svg);  /* 自定义箭头图标 */
-        }
-        QComboBox QAbstractItemView {       /* 下拉列表 */
-            background: #E1E1E1;            /* 下拉列表背景 */
-            border: 1px solid #CCC;         /* 下拉列表边框 */
-            selection-background-color: #A0A0A0;    /* 下拉列表选中项背景 */
-            selection-color: white;         /* 下拉列表选中项颜色 */
-            outline: 0;                     /* 去除虚线框 */
-        }
-        QComboBox:hover {       /* 鼠标悬停 */
-            background-color: #C0C0C0;      /* 背景颜色 */
-        }
-    )");
-
-    this->applyStyleToWidget(this->ui->pushButton_SaveAlgorithmParameter, buttonStyle);
-    this->applyStyleToWidget(this->ui->comboBox_BIBBoradType, comboBoxStyle);
-
-    this->applyStyleToWidget(this->ui->groupBox_BGA63_BuckleParameter, groupBoxStyle);
-    this->applyStyleToWidget(this->ui->groupBox_BGA63_ChipParameter, groupBoxStyle);
-
-    this->applyStyleToWidget(this->ui->groupBox_BGA154_BuckleParameter, groupBoxStyle);
-    this->applyStyleToWidget(this->ui->groupBox_BGA154_ChipParameter, groupBoxStyle);
-
-    this->applyStyleToWidget(this->ui->groupBox_WSON8_BuckleParameter, groupBoxStyle);
-    this->applyStyleToWidget(this->ui->groupBox_WSON8_ChipParameter, groupBoxStyle);
-
-    this->applyStyleToWidget(this->ui->groupBox_SOIC16_BuckleParameter, groupBoxStyle);
-    this->applyStyleToWidget(this->ui->groupBox_SOIC16_ChipParameter, groupBoxStyle);
-}
-
-void AlgorithmParameterView::applyStyleToWidget(QWidget *widget, const QString &qssStyle)
-{
-    if (widget) { // 检查控件是否有效
-        widget->setStyleSheet(qssStyle);
+    if (type_name != "") //如果类型名不为空，则保存Json文件
+    {
+        // qDebug() << "类型为," << type_name << "是保存算法文件信号";
+        this->m_SaveJsonFiles->SaveAlgorithmParameterJsonFile(m_Algorithm_Parameter_QJsonObj,
+                                                              type_name);
     } else {
-        qDebug() << "警告：传入的控件指针为空！";
+        // qDebug() << "类型为空，不是保存算法文件信号";
     }
+
+    // 初始化离线测试算法参数
+    // 默认离线检测算法为"BGA63"
+    int init_index = 0;
+    QString init_offline_type_name = "BGA63";
+    this->QJsonObject_Algorithm(m_Algorithm_Parameter_Map[init_offline_type_name],
+                                m_OffLineTest_AlgorithmParameter);
+    this->m_OffLineTest->OffLineTest_BIBBoardType(init_index, init_offline_type_name);
+    // qDebug() << "算法参数信息已更新";
 }
