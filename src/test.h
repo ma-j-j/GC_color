@@ -1,115 +1,96 @@
-#ifndef CAMERA_H
-#define CAMERA_H
+#ifndef LOGGER_H
+#define LOGGER_H
 
+#include <QDateTime>
 #include <QDebug>
-#include <QJsonObject>
-#include <QMessageBox>
-#include <QObject>
-#include "15000_BackEnd/log4cplus/qlog4cplus.h"
-#include <GalaxyIncludes.h>
-#include <iostream>
-#include <opencv2/opencv.hpp>
+#include <QFile>
+#include <QMutex>
+#include <QObject> // 新增：添加QObject头文件
+#include <QString>
+#include <QTextStream>
+#include <string>
 
-// 图片标志位
-enum class PictureType {
-    img_save,                      // 模式类型0
-    img_show,                      // 模式类型1
-    img_detect_LoaderMode_Before,  // 模式类型2
-    img_detect_LoaderMode_Middle,  // 模式类型3
-    img_detect_LoaderMode_After,   // 模式类型4
-    img_detect_CuttingMode_Before, // 模式类型5
-    img_detect_CuttingMode_Middle, // 模式类型6
-    img_detect_CuttingMode_After   // 模式类型7
-};
+enum class LogLevel { LOG_DEBUG, LOG_INFO, LOG_WARNING, LOG_ERROR, LOG_FATAL };
 
-// 定义字符串到 PictureType 的映射
-static QMap<QString, PictureType> createPictureTypeMapping()
+// 新增：继承QObject以支持信号
+class Logger : public QObject
 {
-    QMap<QString, PictureType> mapping;
-    mapping["OffLineImageSave"] = PictureType::img_save;
-    mapping["OffLineImageShow"] = PictureType::img_show;
-    mapping["LoaderMode_Before"] = PictureType::img_detect_LoaderMode_Before;
-    mapping["LoaderMode_Middle"] = PictureType::img_detect_LoaderMode_Middle;
-    mapping["LoaderMode_After"] = PictureType::img_detect_LoaderMode_After;
-    mapping["CuttingMode_Before"] = PictureType::img_detect_CuttingMode_Before;
-    mapping["CuttingMode_Middle"] = PictureType::img_detect_CuttingMode_Middle;
-    mapping["CuttingMode_After"] = PictureType::img_detect_CuttingMode_After;
-    return mapping;
-}
-
-// 用于检测模式的全局映射表
-static const QMap<QString, PictureType> g_pictureTypeMapping = createPictureTypeMapping();
-
-// 相机拍照信息
-struct CameraImage_information
-{
-    int CamerID;
-    PictureType m_PictureType;
-    std::string CameraSN;
-    cv::Mat img;
-};
-
-// 用户继承采集事件处理类
-class CSampleCaptureEventHandler : public QObject, public ICaptureEventHandler
-{
-    Q_OBJECT
-private:
-    std::shared_ptr<CameraImage_information> m_imgInformation;
+    Q_OBJECT // 新增：启用Qt元对象系统
 
 public:
-    explicit CSampleCaptureEventHandler(const std::string &sn, int camerID)
-    {
-        m_imgInformation->CameraSN = sn;
-        m_imgInformation->CamerID = camerID;
-    }
+    // 单例模式
+    static Logger &getInstance();
 
-    //回调函数采集图像
-    void DoOnImageCaptured(CImageDataPointer &objImageDataPointer, void *pUserParam);
+    // 禁用拷贝构造和赋值操作
+    Logger(const Logger &) = delete;
+    Logger &operator=(const Logger &) = delete;
 
-    // 相机用于设置图片模式
-    void setPictureType(PictureType type) { m_imgInformation->m_PictureType = type; }
+    // 设置日志文件前缀（如"mylog"）
+    void setLogPrefix(const QString &prefix);
+    void setLogPrefix(const std::string &prefix);
 
-signals:
-    void signals_Camer_Sent_TakePhoto(std::shared_ptr<CameraImage_information>); //发图片
-};
+    // 设置日志目录
+    void setLogDirectory(const QString &directory);
+    void setLogDirectory(const std::string &directory);
 
-class Camera : public QObject
-{
-    Q_OBJECT
-public:
-    explicit Camera(QObject *parent = nullptr);
-    ~Camera();
+    // 设置是否输出到控制台
+    void setConsoleOutput(bool enable);
 
-    //初始化相机
-    void Camera_Init();
+    // 设置日志级别
+    void setLogLevel(LogLevel level);
 
-    // 使用map来建立SN与编号的映射关系，更清晰易维护
-    std::unordered_map<std::string, int> m_CameraMapTable = {
-        {"LKR25070001", 0}, // 1号相机
-        {"LKR25070002", 1}, // 2号相机
-        {"LKR25070003", 2}  // 3号相机
-    };
+    // 原有接口：只写入日志，不发送信号
+    void writeLog(LogLevel level, const QString &message);
+    void writeLog(LogLevel level, const std::string &message);
 
-public slots:
-    void slots_Camera_Receive_Exposure(QJsonObject);   // 接收曝光时间
-    void slots_Camera_Receive_TakePhoto_Mode(QString); // 接收检测模式
+    // 新增接口：写入日志并发送信号
+    void writeLogWithSignal(LogLevel level, const QString &message);
+    void writeLogWithSignal(LogLevel level, const std::string &message);
 
-signals:
-    void signals_Camera_Sent_SavePicture(std::shared_ptr<CameraImage_information>); // 发图片用于保存
-    void singals_Camera_Sent_ShowPicture(
-        std::shared_ptr<CameraImage_information>); // 发图片用于离线检测显示
-    void signals_Camera_Sent_DetectThread(
-        std::shared_ptr<CameraImage_information>); // 发图片用于算法检测
+signals: // 新增：声明信号
+    void signals_Logger_Sent_Log(LogLevel level, QString message);
 
 private:
-    CSampleCaptureEventHandler *m_CSampleCapture;
-    ICaptureEventHandler *m_ICapture;
-    // 相机的成员变量
-    std::vector<CGXDevicePointer> m_devices;
-    std::vector<CGXStreamPointer> m_streams;
-    std::vector<CGXFeatureControlPointer> m_featureControls;
-    std::vector<CSampleCaptureEventHandler *> m_eventHandlers;
-    int m_Camera_Exposure; // 相机曝光时间
+    Logger(QObject *parent = nullptr); // 修改：添加QObject父类构造
+    ~Logger();
+
+    // 核心日志写入实现（内部使用）
+    void writeLogInternal(LogLevel level, const QString &message);
+
+    // 检查并切换日志文件（如果日期已更改）
+    void checkAndSwitchLogFile();
+
+    // 获取当前日期字符串（格式：yyyyMMdd）
+    QString getCurrentDateString() const;
+
+    // 日志级别转字符串
+    QString levelToString(LogLevel level) const;
+
+    // 获取当前时间字符串（格式：yyyy-MM-dd hh:mm:ss.zzz）
+    QString getCurrentTimeString() const;
+
+    QFile m_logFile;          // 日志文件
+    QTextStream m_fileStream; // 文件流
+    QMutex m_mutex;           // 互斥锁，保证线程安全
+    bool m_consoleOutput;     // 是否输出到控制台
+    LogLevel m_logLevel;      // 日志级别
+    QString m_logPrefix;      // 日志文件前缀
+    QString m_logDirectory;   // 日志目录
+    QString m_currentDate;    // 当前日志文件的日期
 };
 
-#endif // CAMERA_H
+// 便捷宏定义（原有宏保持不变，新增带信号的宏）
+#define LOG_DEBUG(msg) Logger::getInstance().writeLog(LogLevel::LOG_DEBUG, msg)
+#define LOG_INFO(msg) Logger::getInstance().writeLog(LogLevel::LOG_INFO, msg)
+#define LOG_WARNING(msg) Logger::getInstance().writeLog(LogLevel::LOG_WARNING, msg)
+#define LOG_ERROR(msg) Logger::getInstance().writeLog(LogLevel::LOG_ERROR, msg)
+#define LOG_FATAL(msg) Logger::getInstance().writeLog(LogLevel::LOG_FATAL, msg)
+
+// 新增带信号的日志宏
+#define LOG_DEBUG_SIGNAL(msg) Logger::getInstance().writeLogWithSignal(LogLevel::LOG_DEBUG, msg)
+#define LOG_INFO_SIGNAL(msg) Logger::getInstance().writeLogWithSignal(LogLevel::LOG_INFO, msg)
+#define LOG_WARNING_SIGNAL(msg) Logger::getInstance().writeLogWithSignal(LogLevel::LOG_WARNING, msg)
+#define LOG_ERROR_SIGNAL(msg) Logger::getInstance().writeLogWithSignal(LogLevel::LOG_ERROR, msg)
+#define LOG_FATAL_SIGNAL(msg) Logger::getInstance().writeLogWithSignal(LogLevel::LOG_FATAL, msg)
+
+#endif // LOGGER_H
