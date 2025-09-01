@@ -9,15 +9,15 @@ Logger::Logger(QObject *parent)
     , m_consoleOutput(true)
     , m_logLevel(LogLevel::LOG_DEBUG)
 {
-    // 默认日志前缀
-    m_logPrefix = "mylog";
+    // 日志前缀
+    m_logPrefix = "Run_logs";
+    // 日志路径
+    m_logDirectory = "../../Logs/Run_logs";
+    QDir().mkpath(m_logDirectory); // 创建日志目录（如果不存在）
 
-    // 默认日志路径：应用程序目录下的logs文件夹
-    // m_logDirectory = QCoreApplication::applicationDirPath() + "/logs";
-    m_logDirectory = "../../Logs";
-
-    // 创建日志目录（如果不存在）
-    QDir().mkpath(m_logDirectory);
+    // 初始化结果日志目录
+    m_resultLogDirectory = "../../Logs/Results_logs";
+    QDir().mkpath(m_resultLogDirectory); // 创建结果日志目录（如果不存在）
 
     // 初始化日志文件
     checkAndSwitchLogFile();
@@ -187,4 +187,46 @@ QString Logger::levelToString(LogLevel level) const
 QString Logger::getCurrentTimeString() const
 {
     return QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz");
+}
+
+// 新增：结果日志写入实现
+void Logger::writeResultLog(const QString &prefix, LogLevel level, const QString &message)
+{
+    QMutexLocker locker(&m_mutex);
+
+    // 检查日志级别
+    if (static_cast<int>(level) < static_cast<int>(m_logLevel)) {
+        return;
+    }
+
+    // 获取当前日期和时间
+    QString currentDate = getCurrentDateString();
+    QString timeStr = getCurrentTimeString();
+    QString levelStr = levelToString(level);
+    QString logMessage = QString("[%1] [%2] %3\n").arg(timeStr).arg(levelStr).arg(message);
+
+    // 构建结果日志文件路径：前缀_Results_日期.log
+    QString logFileName = QString("%1_Results_%2.log").arg(prefix).arg(currentDate);
+    QString logFilePath = m_resultLogDirectory + "/" + logFileName;
+
+    // 写入结果日志文件
+    QFile resultFile(logFilePath);
+    if (resultFile.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
+        QTextStream stream(&resultFile);
+        stream << logMessage;
+        resultFile.close();
+    } else {
+        QString error = "无法打开结果日志文件: " + logFilePath;
+        LOG_ERROR_SIGNAL(error);
+    }
+
+    // 同时输出到控制台（如果启用）
+    if (m_consoleOutput) {
+        std::cout << logMessage.toStdString();
+    }
+}
+
+void Logger::writeResultLog(const QString &prefix, LogLevel level, const std::string &message)
+{
+    writeResultLog(prefix, level, QString::fromStdString(message));
 }
