@@ -47,6 +47,10 @@ public:
     void writeLogWithSignal(LogLevel level, const QString &message);
     void writeLogWithSignal(LogLevel level, const std::string &message);
 
+    // 新增：写入结果日志（指定前缀，输出到Results_log子目录）
+    void writeResultLog(const QString &prefix, LogLevel level, const QString &message);
+    void writeResultLog(const QString &prefix, LogLevel level, const std::string &message);
+
 signals: // 新增：声明信号
     void signals_Logger_Sent_Log(LogLevel level, QString message);
 
@@ -77,7 +81,17 @@ private:
     QString m_logPrefix;      // 日志文件前缀
     QString m_logDirectory;   // 日志目录
     QString m_currentDate;    // 当前日志文件的日期
+
+    QString m_resultLogDirectory; // 新增：结果日志目录
 };
+
+// 新增：结果日志宏定义
+#define LOG_RESULT(prefix, level, msg) Logger::getInstance().writeResultLog(prefix, level, msg)
+#define LOG_RESULT_DEBUG(prefix, msg) LOG_RESULT(prefix, LogLevel::LOG_DEBUG, msg)
+#define LOG_RESULT_INFO(prefix, msg) LOG_RESULT(prefix, LogLevel::LOG_INFO, msg)
+#define LOG_RESULT_WARNING(prefix, msg) LOG_RESULT(prefix, LogLevel::LOG_WARNING, msg)
+#define LOG_RESULT_ERROR(prefix, msg) LOG_RESULT(prefix, LogLevel::LOG_ERROR, msg)
+#define LOG_RESULT_FATAL(prefix, msg) LOG_RESULT(prefix, LogLevel::LOG_FATAL, msg)
 
 // 便捷宏定义（原有宏保持不变，新增带信号的宏）
 #define LOG_DEBUG(msg) Logger::getInstance().writeLog(LogLevel::LOG_DEBUG, msg)
