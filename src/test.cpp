@@ -1,196 +1,281 @@
-void Read_JsonFile::read_ROIJson()
+#include "TitleView.h"
+#include "ui_TitleView.h"
+
+TitleView::TitleView(QWidget *parent)
+    : QWidget(parent)
+    , ui(new Ui::TitleView)
+{
+    ui->setupUi(this);
+
+    // 设置标题栏最大高度为32
+    this->setFixedHeight(40);
+    // 隐藏标题栏
+    this->setWindowFlags(Qt::FramelessWindowHint);
+    // 设置窗口图标
+    this->setWindowIcon(QIcon(":/Image/TitleViewResources/BW_Vision.ico"));
+
+    // 控件样式表初始化
+    ControStyleInit();
+
+    // 连接信号和槽
+    connect(this->ui->pushButton_Min,&QPushButton::clicked,this,&TitleView::slotTitleView_On_AllPushButton_Clicked);//最小化按钮点击
+    connect(this->ui->pushButton_Max,&QPushButton::clicked,this,&TitleView::slotTitleView_On_AllPushButton_Clicked);//最大化按钮点击
+    connect(this->ui->pushButton_Close,&QPushButton::clicked,this,&TitleView::slotTitleView_On_AllPushButton_Clicked);//关闭按钮点击
+    connect(this->ui->pushButton_User,&QPushButton::clicked,this,&TitleView::slotTitleView_On_AllPushButton_Clicked);//用户按钮点击
+
+}
+
+TitleView::~TitleView()
+{
+    delete ui;
+}
+
+void TitleView::slotTitleView_On_AllPushButton_Clicked()
+{
+
+    QPushButton *pButton = qobject_cast<QPushButton *>(sender());
+    QWidget *pWindow = this->window();
+
+    if (pWindow->isTopLevel())
+    {
+        if(pButton == this->ui->pushButton_Min)//最小化
+        {
+            pWindow->showMinimized();
+        }
+        else if(pButton == this->ui->pushButton_Close)//关闭
+        {
+            // if (m_trayIcon->isVisible()) {
+            //     pWindow->hide();
+            //     this->m_trayIcon->showMessage(u8"30000视觉",u8"程序已缩小至系统托盘,双击可打开程序。",QSystemTrayIcon::Information,3000);
+            // }
+            this->close();        // 关闭主窗口
+            QApplication::quit(); // 确保进程退出（如果仍有后台线程）
+        }
+        else if(pButton == this->ui->pushButton_Max)//最大化
+        {
+            // pWindow->isMaximized()?pWindow->showNormal():pWindow->showMaximized();
+            if(pWindow->isMaximized())
+            {
+                // 开启窗口还原
+                this->ui->pushButton_Max->setStyleSheet(
+                    "QPushButton {"
+                    "   image: url(:/Image/TitleViewResources/fullScreen.svg);"
+                    "   width: 32px;"
+                    "   height: 32px;"
+                    "   background-color: rgb(240, 240, 240);"
+                    "   border: none;"
+                    "   padding: 5px;"
+                    "}"
+                    "QPushButton:hover {"
+                    "    background-color: rgba(0, 120, 215, 0.2);"  // 鼠标悬停时背景颜色为淡蓝色
+                    "}"
+                    "QPushButton:pressed {"
+                    "    background-color: rgba(0,120,215, 0.5);"       // 按下时背景颜色为深蓝色
+                    "}"
+                    );
+                pWindow->showNormal();
+            }
+            else
+            {
+                // 开启窗口全屏
+                this->ui->pushButton_Max->setStyleSheet(
+                    "QPushButton {"
+                    "   image: url(:/Image/TitleViewResources/restore.svg);"
+                    "   width: 32px;"
+                    "   height: 32px;"
+                    "   background-color: rgb(240, 240, 240);"
+                    "   border: none;"
+                    "   padding: 5px;"
+                    "}"
+                    "QPushButton:hover {"
+                    "    background-color: rgba(0, 120, 215, 0.2);"  // 鼠标悬停时背景颜色为淡蓝色
+                    "}"
+                    "QPushButton:pressed {"
+                    "    background-color: rgba(0,120,215, 0.5);"       // 按下时背景颜色为深蓝色
+                    "}"
+                    );
+                pWindow->showMaximized();
+                emit signalTitleView_ShowAnnoMin();
+            }
+            emit signalTitleView_ShowAnnoMax();
+        }
+      else if(pButton == this->ui->pushButton_User)//用户
+        {
+            emit this->signalTitleView_PushButton_User_Clicked();
+        }
+    }
+}
+
+void TitleView::slotTitleView_On_TrayIconQuit()
+{
+    //先弹出窗口
+    emit this->signalTitleView_ShowMainWindow();
+    QMessageBox::StandardButton reply;
+    reply = QMessageBox::question(this, u8"退出", u8"确定要退出视觉程序吗？", QMessageBox::Yes | QMessageBox::No);
+    if (reply == QMessageBox::Yes)
+    {
+        qDebug()<<"Yes";
+        emit QApplication::quit();
+    }
+    else
+    {
+        qDebug()<<"No";
+    }
+}
+
+void TitleView::mousePressEvent(QMouseEvent *event)
+{
+    // QPushButton *pButton = qobject_cast<QPushButton *>(sender());
+    QWidget *pWindow = this->window();
+    if (pWindow->isMaximized()) {
+        // 如果窗口最大化，则不处理拖动事件
+        return;
+    }
+    //鼠标左键按下事件
+    if(event->button()==Qt::LeftButton)
+    {
+        // 记录鼠标左键状态
+        m_leftButtonPressed = true;
+        // 记录鼠标在屏幕中的位置
+        m_start = event->globalPos();
+    }
+    QWidget::mousePressEvent(event);
+}
+
+void TitleView::mouseMoveEvent(QMouseEvent *event)
+{
+    if(true==this->m_leftButtonPressed)
+    {
+        // 将父窗体移动到父窗体原来的位置加上鼠标移动的位置
+        this->window()->move(this->window()->geometry().topLeft()+event->globalPos()-this->m_start);
+        // 将鼠标在屏幕中的位置替换为新的位置
+        this->m_start = event->globalPos();
+    }
+    QWidget::mouseMoveEvent(event);
+}
+
+void TitleView::mouseReleaseEvent(QMouseEvent *event)
+{
+    if(event->button() == Qt::LeftButton)
+    {
+        this->m_leftButtonPressed =false;
+    }
+    QWidget::mouseReleaseEvent(event);
+}
+
+void TitleView::mouseDoubleClickEvent(QMouseEvent *event)
+{
+    emit this->ui->pushButton_Max->clicked(true);
+}
+
+//更改样式
+bool TitleView::ControStyleInit()
 {
     try {
-        QString base_dir_path = "../../Job_Files/"; // 最外层目录，比如包含 BGA63、BGA154 等子文件夹
-        QString roi_file_name = "ROIs.json";        // 每个子目录中的 ROI 文件名
+        //设置标题栏整体背景颜色
+        // QPalette palette = this->palette();
+        // palette.setColor(QPalette::Window, QColor(235, 235, 235));
+        // this->setPalette(palette);
+        // this->setAutoFillBackground(true); //确保背景被填充
 
-        QDir base_dir(base_dir_path);
-        if (!base_dir.exists()) {
-            QString error = "ROI_JSON 文件目录不存在:" + base_dir_path;
-            LOG_ERROR_SIGNAL(error);
-            return;
-        }
+        // 标题栏最左侧图标设置
+        QPixmap pixmap(":/Image/TitleViewResources/BW_logo.png");
+        QPixmap scaledPixmap = pixmap.scaledToHeight(40, Qt::SmoothTransformation);
+        this->ui->label_BW_Icon->setPixmap(scaledPixmap);
 
-        // 获取所有子目录（BGA63, BGA154 ...）
-        QFileInfoList sub_dirs = base_dir.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot);
+        QPixmap pixmap2(":/Image/TitleViewResources/15000-2D.png");
+        QPixmap scaledPixmap2 = pixmap2.scaledToHeight(40, Qt::SmoothTransformation);
+        this->ui->label_title->setPixmap(scaledPixmap2);
 
-        if (sub_dirs.isEmpty()) {
-            QString error = "未找到任何子目录:" + base_dir_path;
-            LOG_ERROR_SIGNAL(error);
-            return;
-        }
+        this->ui->pushButton_User->setStyleSheet(
+            "QPushButton {"
+            // "   image: url(:/Image/TitleViewResources/userLogin.svg);"
+            "   background-color:rgb(240, 240, 240);"
+            "   border: none;"
+            "   padding: 5px;"
+            "}"
+            "QPushButton:hover {"
+            "    background-color: rgba(0, 120, 215, 0.2);"  // 鼠标悬停时背景颜色为淡蓝色
+            "}"
+            "QPushButton:pressed {"
+            "    background-color: rgba(0,120,215, 0.5);"       // 按下时背景颜色为深蓝色
+            "}"
+            );
+        this->ui->pushButton_User->setIcon(QIcon(":/Image/TitleViewResources/userLogin.svg"));
+        this->ui->pushButton_User->setIconSize(QSize(38,38));
 
-        // 定义存储结构：类型名（如 "BGA63"） -> ROI 数据
-        std::map<QString, std::vector<cv::Rect>> roi_data_per_file;
+        this->ui->pushButton_Min->setStyleSheet(
+            "QPushButton {"
+            "   image: url(:/Image/TitleViewResources/minimize.svg);"
+            "   width: 32px;"
+            "   height: 32px;"
+            "   background-color:rgb(240, 240, 240);"
+            "   border: none;"
+            "   padding: 5px;"
+            "}"
+            "QPushButton:hover {"
+            "    background-color: rgba(0, 120, 215, 0.2);"  // 鼠标悬停时背景颜色为淡蓝色
+            "}"
+            "QPushButton:pressed {"
+            "    background-color: rgba(0,120,215, 0.5);"    // 按下时背景颜色为深蓝色
+            "}"
+        );
 
-        for (const QFileInfo &sub_dir_info : sub_dirs) {
-            QString type_name = sub_dir_info.fileName(); // 子目录名，如 BGA63
-            // qDebug() << "type_name:" << type_name;
-            QString roi_file_path = sub_dir_info.absoluteFilePath() + "/" + roi_file_name;
-            QFileInfo roi_file_info(roi_file_path);
+        this->ui->pushButton_Max->setStyleSheet(
+            "QPushButton {"
+            "   image: url(:/Image/TitleViewResources/fullScreen.svg);"
+            "   width: 32px;"
+            "   height: 32px;"
+            "   background-color: rgb(240, 240, 240);"
+            "   border: none;"
+            "   padding: 5px;"
+            "}"
+            "QPushButton:hover {"
+            "    background-color: rgba(0, 120, 215, 0.2);"  // 鼠标悬停时背景颜色为淡蓝色
+            "}"
+            "QPushButton:pressed {"
+            "    background-color: rgba(0,120,215, 0.5);"       // 按下时背景颜色为深蓝色
+            "}"
+            );
 
-            if (!roi_file_info.exists()) {
-                QString error = "子目录中未找到 ROIs.json 文件:" + roi_file_path;
-                LOG_ERROR_SIGNAL(error);
-                continue; // 跳过这个子目录
+        this->ui->pushButton_Close->setStyleSheet(
+            "QPushButton {"
+            "   image: url(:/Image/TitleViewResources/close.svg);"
+            "   width: 32px;"
+            "   height: 32px;"
+            "   background-color: rgb(240, 240, 240);"
+            "   border: none;"
+            "}"
+            "QPushButton:hover {"
+            "    background-color: rgba(225,72,72, 0.7);"  // 鼠标悬停时背景颜色为淡红色
+            "}"
+            "QPushButton:pressed {"
+            "    background-color: rgba(225,72,72, 1);"    // 按下时背景颜色为深红色
+            "}"
+            );
+
+        // 添加系统托盘
+        m_trayIcon = new QSystemTrayIcon(this);
+        m_trayIcon->setIcon(QIcon(":/Image/TitleViewResources/BW_Vision.ico"));
+        // 设置系统托盘可见
+        m_trayIcon->setVisible(true);
+        m_trayIcon->setToolTip(u8"30000视觉检测软件");
+
+        QMenu *trayIconMenu = new QMenu(this);
+        QAction *quitAction = trayIconMenu->addAction(u8"退出");
+        //点击退出选项程序将退出
+        connect(quitAction, &QAction::triggered, this, &TitleView::slotTitleView_On_TrayIconQuit);
+
+        connect(m_trayIcon, &QSystemTrayIcon::activated, this, [&](QSystemTrayIcon::ActivationReason reason) {
+            if (reason == QSystemTrayIcon::DoubleClick) {
+                emit this->signalTitleView_ShowMainWindow();
             }
+        });
+        m_trayIcon->setContextMenu(trayIconMenu);
 
-            // 调用 Extract_RoiRegion 提取 ROI 数据
-            std::vector<cv::Rect> current_roi_data;
-            try {
-                this->Extract_RoiRegion(roi_file_info.absoluteFilePath(), current_roi_data);
-            } catch (const std::exception &e) {
-                std::string error = "解析 ROI 文件失败:" + roi_file_info.filePath().toStdString()
-                                    + " 错误:" + e.what();
-                LOG_ERROR_SIGNAL(error);
-                continue;
-            }
-
-            // 将 ROI 数据存入映射表（键为子目录名，例如 "BGA63"）
-            roi_data_per_file[type_name] = current_roi_data;
-        }
-
-        // 发送映射表（类型名 -> ROI 数据）
-        emit this->signals_Model_Sent_RoiData(roi_data_per_file);
+        return true;
     } catch (...) {
-        QString error = "读取所有 ROI_JSON 文件的数据失败";
-        LOG_ERROR_SIGNAL(error);
+        return false;
     }
-}
 
-void Read_JsonFile::read_AlgorithmParameterJson()
-{
-    try {
-        QString base_dir_path = "../../Job_Files/"; // 最外层目录
-        QString algo_file_name = "Algorithms.json"; // 每个子目录中的算法参数文件
-
-        QDir base_dir(base_dir_path);
-        if (!base_dir.exists()) {
-            QString error = "算法参数 JSON 文件目录不存在:" + base_dir_path;
-            LOG_ERROR_SIGNAL(error);
-            return;
-        }
-
-        // 获取所有子目录（如 BGA63, BGA154 ...）
-        QFileInfoList sub_dirs = base_dir.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot);
-        if (sub_dirs.isEmpty()) {
-            QString error = "未找到任何子目录:" + base_dir_path;
-            LOG_ERROR_SIGNAL(error);
-            return;
-        }
-
-        // 定义存储结构：类型名（如 "BGA63"） -> 算法参数 QJsonObject
-        std::map<QString, QJsonObject> algorithm_parameter_map;
-
-        for (const QFileInfo &sub_dir_info : sub_dirs) {
-            QString type_name = sub_dir_info.fileName(); // 子目录名，如 "BGA63"
-            // qDebug() << "type_name:" << type_name;
-            QString algo_file_path = sub_dir_info.absoluteFilePath() + "/" + algo_file_name;
-            QFileInfo algo_file_info(algo_file_path);
-
-            if (!algo_file_info.exists()) {
-                QString error = "子目录中未找到 Algorithms.json 文件:" + algo_file_path;
-                LOG_ERROR_SIGNAL(error);
-                continue;
-            }
-
-            // 读取并解析 JSON 文件
-            QJsonObject jsonObj;
-            try {
-                jsonObj = this->readJsonFile(algo_file_info.absoluteFilePath());
-            } catch (const std::exception &e) {
-                QString error = QString("解析算法参数 JSON 文件失败: %1, 错误: %2")
-                                    .arg(algo_file_info.fileName())
-                                    .arg(e.what());
-                LOG_ERROR_SIGNAL(error);
-                continue;
-            }
-
-            // 检查是否解析成功
-            if (jsonObj.isEmpty()) {
-                QString error = QString("算法参数 JSON 文件为空或解析失败: %1")
-                                    .arg(algo_file_info.filePath());
-                LOG_ERROR_SIGNAL(error);
-                continue;
-            }
-
-            // 存入映射表（键为子目录名，例如 "BGA63"）
-            algorithm_parameter_map[type_name] = jsonObj;
-        }
-
-        // 发送映射表：类型名 -> 算法参数 JSON 对象
-        QString type_name = "";
-        emit this->signals_Model_Sent_AlgorithmParameter(algorithm_parameter_map, type_name);
-
-    } catch (const std::exception &e) {
-        QString error = "解析算法参数 JSON 文件错误:" + QString(e.what());
-        LOG_ERROR_SIGNAL(error);
-    }
-}
-
-// 保存 ROI 信息到 Json 文件
-void Save_JsonFile::SaveRoiJsonFile(const std::vector<cv::Rect> &roi_data,
-                                    const int &type_index,
-                                    const QString &type_name)
-{
-    QString dir_path = "../../Job_Files/" + type_name + "/";
-    QString file_name = "ROIs.json";
-    QString save_path = dir_path + file_name;
-
-    try {
-        // 确保目录存在
-        QDir dir;
-        if (!dir.exists(dir_path)) {
-            dir.mkpath(dir_path);
-        }
-        this->SaveRoiRegion(roi_data, save_path);
-        std::string info = (type_name + "/ROIs.json").toStdString() + " 保存成功";
-        LOG_INFO_SIGNAL(info);
-        QMessageBox::information(nullptr, "提示", "ROI信息保存成功！");
-    } catch (const std::exception &e) {
-        std::string error = (type_name + "/ROIs.json").toStdString() + " 保存失败: " + e.what();
-        LOG_ERROR_SIGNAL(error);
-        QMessageBox::information(nullptr, "提示", QString::fromStdString(error));
-    }
-}
-
-// 保存算法信息到 Json 文件
-void Save_JsonFile::SaveAlgorithmParameterJsonFile(const QJsonObject &jsonObj,
-                                                   const QString &type_name)
-{
-    QString dir_path = "../../Job_Files/" + type_name + "/";
-    QString file_name = "Algorithms.json";
-    QString save_path = dir_path + file_name;
-
-    try {
-        // 确保目录存在
-        QDir dir;
-        if (!dir.exists(dir_path)) {
-            dir.mkpath(dir_path);
-        }
-
-        // 将 QJsonObject 转换为 QJsonDocument
-        QJsonDocument doc(jsonObj);
-
-        // 写入文件
-        QFile file(save_path);
-        if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-            QString error = "无法打开算法Json文件:" + save_path;
-            LOG_ERROR_SIGNAL(error);
-            QMessageBox::warning(nullptr, "提示", error);
-            return;
-        }
-
-        file.write(doc.toJson(QJsonDocument::Indented)); // 缩进格式美化 JSON
-        file.close();
-
-        std::string info = (type_name + "/Algorithms.json").toStdString() + " 保存成功";
-        LOG_INFO_SIGNAL(info);
-        QMessageBox::information(nullptr, "提示", "算法参数保存成功！");
-    } catch (const std::exception &e) {
-        std::string error = (type_name + "/Algorithms.json").toStdString()
-                            + " 保存失败: " + e.what();
-        LOG_ERROR_SIGNAL(error);
-        QMessageBox::information(nullptr, "提示", QString::fromStdString(error));
-    }
 }
